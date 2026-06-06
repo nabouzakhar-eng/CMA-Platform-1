@@ -1,0 +1,12 @@
+google-generativeai
+streamlit
+pandas
+pypdf
+python-docx
+sentence-transformers
+faiss-cpu
+folium
+requests
+reportlab
+numpy
+python-dotenv

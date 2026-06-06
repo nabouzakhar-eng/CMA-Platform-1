@@ -1,0 +1,765 @@
+import html
+import json
+import os
+import re
+import sqlite3
+import uuid
+from pathlib import Path
+
+import faiss
+import folium
+import google.generativeai as genai
+import numpy as np
+import pandas as pd
+import streamlit as st
+import streamlit.components.v1 as components
+from docx import Document
+from dotenv import load_dotenv
+from pypdf import PdfReader
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from sentence_transformers import SentenceTransformer
+
+# -----------------------------------------------------------------------------
+# Streamlit page config must be the first Streamlit command.
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="CMA Indigenous Governance AI Platform",
+    page_icon="🌍",
+    layout="wide",
+)
+
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+load_dotenv()
+
+DB_PATH = "cma_platform.db"
+MAP_STORE = Path("maps")
+REPORT_STORE = Path("reports")
+MAP_STORE.mkdir(exist_ok=True)
+REPORT_STORE.mkdir(exist_ok=True)
+
+
+def get_gemini_api_key() -> str | None:
+    """Read Gemini key from Streamlit secrets first, then environment variables."""
+    try:
+        key = st.secrets.get("GEMINI_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.getenv("GEMINI_API_KEY")
+
+
+# -----------------------------------------------------------------------------
+# Styling
+# -----------------------------------------------------------------------------
+st.markdown(
+    """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+.stApp { background: #f5f7fb; }
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #06264f 0%, #02152f 100%);
+}
+section[data-testid="stSidebar"] * { color: white !important; }
+
+.main-title {
+    font-size: 30px;
+    font-weight: 800;
+    color: #0b1f3a;
+    margin-bottom: 0.1rem;
+}
+.subtitle {
+    color: #2563eb;
+    font-size: 15px;
+    margin-bottom: 1.2rem;
+}
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    margin-bottom: 18px;
+}
+.metric-card {
+    background: white;
+    border-radius: 16px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 5px 15px rgba(15, 23, 42, 0.05);
+    min-height: 100px;
+}
+.metric-number { font-size: 28px; font-weight: 800; color: #0b1f3a; }
+.metric-label { color: #64748b; font-size: 14px; }
+.workflow-card {
+    padding: 13px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    font-weight: 650;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+}
+.legal {background:#f3e8ff; color:#6b21a8;}
+.land {background:#dcfce7; color:#166534;}
+.climate {background:#dbeafe; color:#1d4ed8;}
+.full {background:#ffedd5; color:#c2410c;}
+.agent-box {
+    background: white;
+    border-left: 6px solid #2563eb;
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+.success-pill {
+    background: #dcfce7;
+    color: #166534;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 8px;
+}
+.confidence-pill {
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 8px;
+}
+.stButton > button {
+    background: #2563eb;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 700;
+    border: none;
+}
+.stDownloadButton > button {
+    background: #16a34a;
+    color: white;
+    border-radius: 12px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 700;
+    border: none;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# -----------------------------------------------------------------------------
+# Cached embedding model
+# -----------------------------------------------------------------------------
+@st.cache_resource(show_spinner="Loading embedding model...")
+def get_embed_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+EMBED_MODEL = get_embed_model()
+
+# -----------------------------------------------------------------------------
+# Database
+# -----------------------------------------------------------------------------
+def init_db() -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cases (
+            case_id TEXT PRIMARY KEY,
+            title TEXT,
+            query TEXT,
+            workflow TEXT,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS documents (
+            doc_id TEXT PRIMARY KEY,
+            case_id TEXT,
+            filename TEXT,
+            text TEXT,
+            doc_type TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS outputs (
+            output_id TEXT PRIMARY KEY,
+            case_id TEXT,
+            agent_name TEXT,
+            output_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_case(title: str, query: str, workflow: str) -> str:
+    case_id = str(uuid.uuid4())
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO cases (case_id,title,query,workflow,status) VALUES (?,?,?,?,?)",
+        (case_id, title, query, workflow, "running"),
+    )
+    conn.commit()
+    conn.close()
+    return case_id
+
+
+def update_case_status(case_id: str, status: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE cases SET status=? WHERE case_id=?", (status, case_id))
+    conn.commit()
+    conn.close()
+
+
+def save_document(case_id: str, filename: str, text: str, doc_type: str) -> str:
+    doc_id = str(uuid.uuid4())
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO documents (doc_id,case_id,filename,text,doc_type) VALUES (?,?,?,?,?)",
+        (doc_id, case_id, filename, text, doc_type),
+    )
+    conn.commit()
+    conn.close()
+    return doc_id
+
+
+def save_output(case_id: str, agent_name: str, output_json: dict) -> str:
+    output_id = str(uuid.uuid4())
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO outputs (output_id,case_id,agent_name,output_json) VALUES (?,?,?,?)",
+        (output_id, case_id, agent_name, json.dumps(output_json, ensure_ascii=False)),
+    )
+    conn.commit()
+    conn.close()
+    return output_id
+
+
+def query_registry() -> tuple[pd.DataFrame, pd.DataFrame]:
+    conn = sqlite3.connect(DB_PATH)
+    cases = pd.read_sql_query("SELECT * FROM cases ORDER BY created_at DESC", conn)
+    outputs = pd.read_sql_query("SELECT * FROM outputs ORDER BY created_at DESC", conn)
+    conn.close()
+    return cases, outputs
+
+
+init_db()
+
+# -----------------------------------------------------------------------------
+# Document extraction
+# -----------------------------------------------------------------------------
+def extract_text_from_file(uploaded_file) -> str:
+    filename = uploaded_file.name.lower()
+    try:
+        if filename.endswith(".pdf"):
+            reader = PdfReader(uploaded_file)
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+        if filename.endswith(".docx"):
+            doc = Document(uploaded_file)
+            return "\n".join(p.text for p in doc.paragraphs)
+        if filename.endswith((".txt", ".md")):
+            return uploaded_file.read().decode("utf-8", errors="ignore")
+    except Exception as exc:
+        st.warning(f"Could not extract text from {uploaded_file.name}: {exc}")
+    return ""
+
+
+# -----------------------------------------------------------------------------
+# Vector Store
+# -----------------------------------------------------------------------------
+class VectorStore:
+    def __init__(self):
+        self.chunks: list[dict] = []
+        self.index = None
+
+    @staticmethod
+    def chunk_text(text: str, chunk_size: int = 500, overlap: int = 80) -> list[str]:
+        words = text.split()
+        chunks = []
+        start = 0
+        step = max(1, chunk_size - overlap)
+        while start < len(words):
+            chunks.append(" ".join(words[start : start + chunk_size]))
+            start += step
+        return chunks
+
+    def rebuild(self) -> None:
+        self.chunks = []
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute("SELECT doc_id, filename, text, doc_type FROM documents").fetchall()
+        conn.close()
+        for doc_id, filename, text, doc_type in rows:
+            for chunk in self.chunk_text(text or ""):
+                if chunk.strip():
+                    self.chunks.append(
+                        {
+                            "doc_id": doc_id,
+                            "filename": filename,
+                            "doc_type": doc_type,
+                            "text": chunk,
+                        }
+                    )
+        if not self.chunks:
+            self.index = None
+            return
+        embeddings = EMBED_MODEL.encode([c["text"] for c in self.chunks])
+        embeddings = np.array(embeddings).astype("float32")
+        self.index = faiss.IndexFlatL2(embeddings.shape[1])
+        self.index.add(embeddings)
+
+    def search(self, query: str, k: int = 5) -> list[dict]:
+        if self.index is None or not self.chunks:
+            return []
+        q_emb = EMBED_MODEL.encode([query])
+        q_emb = np.array(q_emb).astype("float32")
+        _, indices = self.index.search(q_emb, min(k, len(self.chunks)))
+        return [self.chunks[i] for i in indices[0] if 0 <= i < len(self.chunks)]
+
+
+VECTOR_STORE = VectorStore()
+
+# -----------------------------------------------------------------------------
+# Gemini helpers and agents
+# -----------------------------------------------------------------------------
+def safe_json_response(model, prompt: str) -> dict:
+    response = None
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        return json.loads(response.text)
+    except Exception as exc:
+        raw = getattr(response, "text", "") if response is not None else ""
+        print(f"JSON generation failed: {exc}\nRaw response: {raw}")
+        return {
+            "agent": "System",
+            "summary": f"Generation failed: {exc}",
+            "key_findings": [],
+            "risks": [],
+            "actions": [],
+            "evidence": [],
+            "confidence": "low",
+        }
+
+
+class BaseAgent:
+    def __init__(self, name: str, role: str, model):
+        self.name = name
+        self.role = role
+        self.model = model
+
+    def run(self, case_id: str, query: str, workflow: str, extra_context: str = "") -> dict:
+        evidence = VECTOR_STORE.search(query, k=5)
+        evidence_text = "\n\n".join(
+            f"Source: {e['filename']}\n{e['text']}" for e in evidence
+        )
+        prompt = f"""
+You are {self.name} for the CMA Indigenous Governance AI Platform.
+
+ROLE:
+{self.role}
+
+WORKFLOW:
+{workflow}
+
+TASK:
+{query}
+
+RETRIEVED EVIDENCE:
+{evidence_text}
+
+EXTRA CONTEXT FROM PREVIOUS AGENTS:
+{extra_context}
+
+RULES:
+- Use retrieved evidence where possible.
+- Do not invent facts.
+- Cite document filenames.
+- If evidence is missing, say so clearly.
+- Produce valid JSON only.
+
+JSON SCHEMA:
+{{
+  "agent": "{self.name}",
+  "summary": "",
+  "key_findings": [],
+  "risks": [],
+  "actions": [],
+  "evidence": [],
+  "confidence": "low | medium | high"
+}}
+"""
+        output = safe_json_response(self.model, prompt)
+        output["agent"] = self.name
+        save_output(case_id, self.name, output)
+        return output
+
+
+def build_agents(model) -> dict[str, BaseAgent]:
+    return {
+        "land": BaseAgent("Land & Natural Resources Agent", "Analyze land rights, oil, gas, mining, FPIC, UNDRIP, benefit sharing, and resource sovereignty.", model),
+        "human": BaseAgent("Human Rights & Rule of Law Agent", "Analyze human rights violations, equality, discrimination, accountability, and UN mechanisms.", model),
+        "data": BaseAgent("AI & Data Analytics Agent", "Structure evidence, detect patterns, identify data gaps, and support data sovereignty.", model),
+        "climate": BaseAgent("Nature Conservation & Climate Change Agent", "Analyze environmental harm, water, pollution, biodiversity, climate risk, and ecological justice.", model),
+        "youth": BaseAgent("Women, Children & Youth Agent", "Analyze participation, education, safeguarding, empowerment, and inclusion.", model),
+        "culture": BaseAgent("Language & Culture Agent", "Analyze Tamazight, Tifinagh, cultural rights, heritage, education, identity, and cultural survival.", model),
+        "citation": BaseAgent("Legal Citation Agent", "Map findings to UNDRIP, ICCPR, ICESCR, CERD, ACHPR, and Indigenous rights standards.", model),
+        "reviewer": BaseAgent("Reviewer Agent", "Review outputs for hallucinations, weak evidence, legal risk, and missing citations.", model),
+        "report": BaseAgent("Report Generation Agent", "Generate polished legal briefs, UN submissions, advocacy reports, and strategic dossiers.", model),
+    }
+
+
+WORKFLOWS = {
+    "legal_workflow": ["human", "citation", "reviewer", "report"],
+    "land_rights_workflow": ["land", "human", "citation", "reviewer", "report"],
+    "climate_risk_workflow": ["climate", "land", "human", "reviewer", "report"],
+    "full_governance_workflow": ["land", "human", "data", "climate", "youth", "culture", "citation", "reviewer", "report"],
+}
+
+
+class ManagerAgent:
+    def __init__(self, agents: dict[str, BaseAgent]):
+        self.agents = agents
+
+    @staticmethod
+    def choose_workflow(query: str) -> str:
+        q = query.lower()
+        if any(x in q for x in ["land", "oil", "gas", "resource", "mining", "fpic"]):
+            return "land_rights_workflow"
+        if any(x in q for x in ["climate", "environment", "pollution", "water"]):
+            return "climate_risk_workflow"
+        if any(x in q for x in ["law", "rights", "violation", "court", "undrip"]):
+            return "legal_workflow"
+        return "full_governance_workflow"
+
+    def run(self, case_id: str, query: str, workflow: str) -> list[dict]:
+        results = []
+        context_chain = ""
+        for key in WORKFLOWS[workflow]:
+            agent = self.agents[key]
+            output = agent.run(case_id, query, workflow, context_chain)
+            results.append(output)
+            context_chain += f"\n\nOutput from {agent.name}:\n{json.dumps(output, ensure_ascii=False)}"
+        return results
+
+
+# -----------------------------------------------------------------------------
+# PDF and map output
+# -----------------------------------------------------------------------------
+def _register_pdf_font() -> str:
+    """Use a Unicode font if available; otherwise fall back to Helvetica."""
+    possible_fonts = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/local/share/fonts/DejaVuSans.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    ]
+    for font_path in possible_fonts:
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont("AppFont", font_path))
+                return "AppFont"
+            except Exception:
+                pass
+    return "Helvetica"
+
+
+def create_agent_pdf_report(case_id: str, agent_json: dict) -> str:
+    font_name = _register_pdf_font()
+    agent_name = agent_json.get("agent", "Agent Report")
+    safe_agent_name = re.sub(r"[^A-Za-z0-9_-]+", "_", agent_name)
+    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_agent_name}.pdf"
+
+    styles = getSampleStyleSheet()
+    for style in styles.byName.values():
+        style.fontName = font_name
+
+    doc = SimpleDocTemplate(str(pdf_path), pagesize=A4)
+    story = [
+        Paragraph("CMA Indigenous Governance AI Platform", styles["Title"]),
+        Spacer(1, 12),
+        Paragraph(html.escape(agent_name), styles["Heading1"]),
+        Spacer(1, 12),
+        Paragraph("Summary", styles["Heading2"]),
+        Paragraph(html.escape(str(agent_json.get("summary", "No summary provided."))), styles["BodyText"]),
+        Spacer(1, 12),
+    ]
+
+    for key, title in [
+        ("key_findings", "Key Findings"),
+        ("risks", "Risks / Concerns"),
+        ("actions", "Recommended Actions"),
+        ("evidence", "Evidence Used"),
+    ]:
+        story.append(Paragraph(title, styles["Heading2"]))
+        items = agent_json.get(key, [])
+        if isinstance(items, list) and items:
+            for item in items:
+                story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
+        elif items:
+            story.append(Paragraph(html.escape(str(items)), styles["BodyText"]))
+        else:
+            story.append(Paragraph("No information provided.", styles["BodyText"]))
+        story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Confidence", styles["Heading2"]))
+    story.append(Paragraph(html.escape(str(agent_json.get("confidence", "Not specified."))), styles["BodyText"]))
+    doc.build(story)
+    return str(pdf_path)
+
+
+def generate_map(case_id: str) -> str:
+    locations = [
+        {"name": "Zuwara", "lat": 32.9333, "lon": 12.0833},
+        {"name": "Nafusa Mountains", "lat": 31.9000, "lon": 11.9000},
+        {"name": "Ghadames", "lat": 30.1337, "lon": 9.5007},
+        {"name": "Ghat", "lat": 24.9633, "lon": 10.1800},
+    ]
+    m = folium.Map(location=[27.0, 17.0], zoom_start=5)
+    for loc in locations:
+        folium.Marker([loc["lat"], loc["lon"]], tooltip=loc["name"]).add_to(m)
+    map_path = MAP_STORE / f"case_{case_id}_map.html"
+    m.save(str(map_path))
+    return str(map_path)
+
+
+# -----------------------------------------------------------------------------
+# Session state
+# -----------------------------------------------------------------------------
+if "workflow_completed" not in st.session_state:
+    st.session_state.workflow_completed = False
+    st.session_state.current_case_id = None
+    st.session_state.current_agent_results = []
+    st.session_state.current_map_path = None
+
+# -----------------------------------------------------------------------------
+# API key and model setup
+# -----------------------------------------------------------------------------
+api_key = get_gemini_api_key()
+if not api_key:
+    st.error("GEMINI_API_KEY is not set. Add it as an environment variable or in Streamlit secrets.")
+    st.stop()
+
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel("gemini-2.5-flash")
+agents = build_agents(model)
+manager = ManagerAgent(agents)
+
+# -----------------------------------------------------------------------------
+# UI
+# -----------------------------------------------------------------------------
+st.sidebar.markdown(
+    """
+# 🌍 CMA
+### Indigenous Governance  
+### AI Platform
+---
+🏠 Dashboard  
+📁 New Case / Consultation  
+📚 Documents  
+⚙️ Workflows  
+🤖 Agents  
+🗺️ Maps & Visuals  
+📄 Reports  
+⚖️ Legal Database  
+"""
+)
+
+st.markdown(
+    """
+<div class="main-title">CMA Indigenous Governance AI Platform</div>
+<div class="subtitle">Empowering Imazighen Rights, Lands, Resources, Languages and Futures</div>
+""",
+    unsafe_allow_html=True,
+)
+
+cases_df, outputs_df = query_registry()
+metric_cols = st.columns(4)
+with metric_cols[0]:
+    st.markdown(f'<div class="metric-card"><div class="metric-label">Total Cases</div><div class="metric-number">{len(cases_df)}</div></div>', unsafe_allow_html=True)
+with metric_cols[1]:
+    st.markdown(f'<div class="metric-card"><div class="metric-label">Stored Outputs</div><div class="metric-number">{len(outputs_df)}</div></div>', unsafe_allow_html=True)
+with metric_cols[2]:
+    st.markdown('<div class="metric-card"><div class="metric-label">Agents</div><div class="metric-number">9</div></div>', unsafe_allow_html=True)
+with metric_cols[3]:
+    st.markdown('<div class="metric-card"><div class="metric-label">Workflows</div><div class="metric-number">4</div></div>', unsafe_allow_html=True)
+
+st.write("")
+left, centre, right = st.columns([1.2, 2.2, 1])
+
+with left:
+    st.markdown('<div class="card"><h4>1. Select Workflow</h4>', unsafe_allow_html=True)
+    st.markdown('<div class="workflow-card legal">⚖️ Legal Workflow<br><small>Human rights, law, violations</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="workflow-card land">🌿 Land-Rights Workflow<br><small>Land, resources, FPIC, agreements</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="workflow-card climate">🌍 Climate-Risk Workflow<br><small>Environment, climate, biodiversity</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="workflow-card full">🏛️ Full Governance Workflow<br><small>All agents comprehensive analysis</small></div>', unsafe_allow_html=True)
+    workflow_choice = st.selectbox(
+        "Choose workflow",
+        ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
+        key="workflow_selectbox",
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="card"><h4>2. Upload Documents</h4>', unsafe_allow_html=True)
+    uploaded_files = st.file_uploader(
+        "Upload evidence files",
+        type=["pdf", "docx", "txt", "md"],
+        accept_multiple_files=True,
+    )
+    doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with centre:
+    st.markdown('<div class="card"><h4>3. Your Consultation / Request</h4>', unsafe_allow_html=True)
+    case_title = st.text_input("Case Title", "Indigenous Rights Case")
+
+    predefined_prompts = {
+        "Select a prompt": "",
+        "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
+        "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
+        "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
+        "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
+    }
+
+    if "query_text_area" not in st.session_state:
+        st.session_state.query_text_area = ""
+
+    def update_consultancy_request_from_predefined():
+        selected = st.session_state.predefined_prompt_selectbox
+        st.session_state.query_text_area = predefined_prompts.get(selected, "")
+
+    st.selectbox(
+        "Choose a predefined consultancy request",
+        list(predefined_prompts.keys()),
+        key="predefined_prompt_selectbox",
+        on_change=update_consultancy_request_from_predefined,
+    )
+    query = st.text_area("Consultancy Request", key="query_text_area", height=170)
+    run_button = st.button("▶ Run Analysis")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with right:
+    st.markdown(
+        """
+<div class="card">
+<h4>Available Tools</h4>
+<p>🌐 Search Web</p>
+<p>⚖️ Legal Database</p>
+<p>📁 Query Registry</p>
+<p>🗺️ Generate Map</p>
+<p>📄 Generate Reports</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+# -----------------------------------------------------------------------------
+# Workflow execution
+# -----------------------------------------------------------------------------
+if run_button:
+    if not query.strip():
+        st.error("Please enter a consultancy request.")
+        st.stop()
+
+    st.session_state.workflow_completed = False
+    st.session_state.current_case_id = None
+    st.session_state.current_agent_results = []
+    st.session_state.current_map_path = None
+
+    with st.spinner("Initializing case and indexing documents..."):
+        case_id = save_case(case_title, query, workflow_choice)
+        st.session_state.current_case_id = case_id
+        if uploaded_files:
+            for f in uploaded_files:
+                text = extract_text_from_file(f)
+                if text.strip():
+                    save_document(case_id, f.name, text, doc_type)
+        VECTOR_STORE.rebuild()
+        st.success("Documents indexed.")
+
+    workflow = manager.choose_workflow(query) if workflow_choice == "auto" else workflow_choice
+    st.info(f"Selected workflow: {workflow}")
+
+    with st.spinner("Running multi-agent workflow..."):
+        results = manager.run(case_id, query, workflow)
+        st.session_state.current_agent_results = results
+        st.success("Multi-agent workflow completed.")
+
+    st.session_state.current_map_path = generate_map(case_id)
+    update_case_status(case_id, "completed")
+    st.session_state.workflow_completed = True
+    st.rerun()
+
+# -----------------------------------------------------------------------------
+# Results
+# -----------------------------------------------------------------------------
+if st.session_state.workflow_completed:
+    st.markdown('<div class="card"><h3>Download Agent Reports</h3>', unsafe_allow_html=True)
+    for r in st.session_state.current_agent_results:
+        agent_name = r.get("agent", "Agent Report")
+        confidence = r.get("confidence", "not specified")
+        summary = html.escape(str(r.get("summary", ""))[:250])
+        pdf_path = create_agent_pdf_report(st.session_state.current_case_id, r)
+        st.markdown(
+            f"""
+<div class="agent-box">
+<b>{html.escape(agent_name)}</b>
+<span class="success-pill">Completed</span>
+<span class="confidence-pill">Confidence: {html.escape(str(confidence))}</span>
+<br><br>{summary}...
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        with open(pdf_path, "rb") as pdf_file:
+            st.download_button(
+                label=f"⬇ Download {agent_name} PDF",
+                data=pdf_file,
+                file_name=os.path.basename(pdf_path),
+                mime="application/pdf",
+                key=f"download_{agent_name}_{st.session_state.current_case_id}",
+            )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.session_state.current_map_path:
+        st.subheader("Example Amazigh Libya Map")
+        components.html(Path(st.session_state.current_map_path).read_text(encoding="utf-8"), height=500)
+
+st.markdown("---")
+if st.button("Reset Workflow"):
+    st.session_state.workflow_completed = False
+    st.session_state.current_case_id = None
+    st.session_state.current_agent_results = []
+    st.session_state.current_map_path = None
+    st.session_state.query_text_area = ""
+    st.rerun()
+
+st.divider()
+st.subheader("Case Registry")
+cases_df, _ = query_registry()
+st.dataframe(cases_df, use_container_width=True)
