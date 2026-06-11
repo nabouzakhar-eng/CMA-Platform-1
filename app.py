@@ -272,27 +272,33 @@ section[data-testid="stSidebar"] h3 {
     margin-bottom: 16px;
 }
 
-/* Government-style hero banner */
+/* Government-style hero banner - fits 1600x200 CMA banner */
 .hero-banner-card {
     background: white;
-    padding: 10px;
-    border-radius: 18px;
+    padding: 0;
+    border-radius: 16px;
     border: 1px solid #e5e7eb;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-    margin-bottom: 22px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    margin-bottom: 20px;
+    overflow: hidden;
+    max-width: 100%;
+    height: auto;
 }
+
 .hero-description {
     background: #ffffff;
     border-left: 5px solid #43a047;
-    padding: 18px 22px;
+    padding: 14px 18px;
     border-radius: 12px;
     border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.035);
-    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
     color: #1f2937;
     font-size: 15px;
-    line-height: 1.65;
+    line-height: 1.6;
 }
+
+
 
 </style>
 """,
