@@ -64,41 +64,35 @@ st.markdown(
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+.stApp { background-color: #f8fafc; }
 
-.stApp {
-    background-color: #ffffff;
-}
-
-/* Main app width / spacing */
-.block-container {
-    padding-top: 1.6rem;
-    padding-left: 4rem;
-    padding-right: 4rem;
-    max-width: 1400px;
-}
-
-/* Sidebar */
+/* Left sidebar upload panel */
 section[data-testid="stSidebar"] {
-    background-color: #eef1f6;
-    border-right: 1px solid #e5e7eb;
+    background: #eef2f7;
+    border-right: 1px solid #dce3ea;
 }
 section[data-testid="stSidebar"] * {
     color: #1f2937 !important;
 }
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #1f2937 !important;
+}
 
-/* Header */
+/* Main title */
 .main-title {
     font-size: 34px;
-    font-weight: 700;
+    font-weight: 800;
     color: #43a047;
     text-align: center;
-    margin-bottom: 0.35rem;
+    margin-bottom: 5px;
 }
 .subtitle {
+    font-size: 17px;
     color: #43a047;
-    font-size: 16px;
     text-align: center;
-    margin-bottom: 2.2rem;
+    margin-bottom: 35px;
 }
 
 /* Inputs */
@@ -106,80 +100,79 @@ section[data-testid="stSidebar"] * {
 .stTextArea textarea {
     background-color: #eaf7ec !important;
     border: 1px solid #c8e6c9 !important;
-    border-radius: 7px !important;
+    border-radius: 8px !important;
 }
 .stSelectbox div[data-baseweb="select"] > div {
     background-color: #f1f3f7 !important;
-    border-radius: 7px !important;
-}
-
-/* Labels */
-label, .stMarkdown, p {
-    color: #1f2937;
+    border-radius: 8px !important;
 }
 
 /* Buttons */
 .stButton > button {
-    background-color: #1e88e5 !important;
+    background-color: #1e88e5;
     color: white !important;
-    border-radius: 6px !important;
-    padding: 0.6rem 1.05rem !important;
-    font-weight: 600 !important;
-    border: none !important;
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    border: none;
 }
 .stButton > button:hover {
-    background-color: #1565c0 !important;
+    background-color: #1565c0;
     color: white !important;
 }
-
-/* Download buttons */
 .stDownloadButton > button {
-    background-color: #2e7d32 !important;
+    background-color: #2e7d32;
     color: white !important;
-    border-radius: 6px !important;
-    font-weight: 600 !important;
-    border: none !important;
+    border-radius: 6px;
+    font-weight: 600;
 }
 
-/* Cards */
-.clean-card {
-    background: #ffffff;
+/* Page sections */
+.card {
+    background: white;
+    padding: 22px;
+    border-radius: 12px;
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 18px;
-    margin-bottom: 18px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.03);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
 }
 .section-title {
     font-size: 24px;
     font-weight: 700;
     color: #1f2937;
-    margin-top: 1.8rem;
-    margin-bottom: 1rem;
+    margin-top: 30px;
+    margin-bottom: 15px;
 }
 .small-muted {
-    color: #6b7280;
     font-size: 13px;
+    color: #6b7280;
 }
-.report-card {
+
+/* Sidebar upload note */
+.upload-box {
     background: white;
-    border-left: 5px solid #43a047;
+    padding: 18px;
     border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 12px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+    border: 1px solid #e5e7eb;
+    margin-top: 10px;
 }
 .upload-note {
     background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
     padding: 14px;
-    color: #6b7280;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    color: #6b7280 !important;
     font-size: 13px;
 }
-hr {
-    margin-top: 2rem;
-    margin-bottom: 2rem;
+
+/* Report card */
+.report-card {
+    background: white;
+    padding: 18px;
+    border-radius: 10px;
+    border-left: 5px solid #43a047;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+    margin-bottom: 15px;
 }
 </style>
 """,
@@ -601,6 +594,8 @@ manager = ManagerAgent(agents)
 # -----------------------------------------------------------------------------
 # UI
 # -----------------------------------------------------------------------------
+
+# Left-hand sidebar: document upload section
 st.sidebar.markdown("## Document Upload")
 st.sidebar.markdown("Upload evidence files")
 
@@ -613,22 +608,25 @@ uploaded_files = st.sidebar.file_uploader(
 
 st.sidebar.markdown(
     """
-<div class="upload-note">
-200MB per file • PDF, DOCX, TXT, MD
+<div class="upload-box">
+    <span class="small-muted">200MB per file • PDF, DOCX, TXT, MD</span>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
+# Page header
 st.markdown(
     """
 <div class="main-title">CMA Indigenous Governance AI Platform</div>
-<div class="subtitle">Empowering Indigenous Peoples' Rights, Cultures, Lands, Natural Resources, Languages and Futures</div>
+<div class="subtitle">
+Empowering Indigenous Peoples' Rights, Cultures, Lands, Natural Resources, Languages and Futures
+</div>
 """,
     unsafe_allow_html=True,
 )
 
-# Main form
+# Main input form
 case_title = st.text_input("Case Title", "Indigenous Rights Case")
 
 predefined_prompts = {
@@ -642,9 +640,11 @@ predefined_prompts = {
 if "query_text_area" not in st.session_state:
     st.session_state.query_text_area = ""
 
+
 def update_consultancy_request_from_predefined():
     selected = st.session_state.predefined_prompt_selectbox
     st.session_state.query_text_area = predefined_prompts.get(selected, "")
+
 
 st.selectbox(
     "Choose a predefined consultancy request:",
