@@ -30,6 +30,7 @@ st.set_page_config(
     page_title="CMA Indigenous Governance AI Platform",
     page_icon="🌍",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # -----------------------------------------------------------------------------
@@ -70,9 +71,47 @@ header {visibility: hidden;}
 section[data-testid="stSidebar"] {
     background: #eef2f7;
     border-right: 1px solid #dce3ea;
+    min-width: 270px !important;
+    max-width: 320px !important;
 }
 section[data-testid="stSidebar"] * {
     color: #1f2937 !important;
+}
+div[data-testid="stSidebarContent"] {
+    padding-top: 1.5rem;
+}
+.sidebar-title {
+    font-size: 21px;
+    font-weight: 800;
+    color: #1f2937;
+    margin-bottom: 6px;
+}
+.sidebar-subtitle {
+    font-size: 13px;
+    color: #4b5563;
+    margin-bottom: 12px;
+}
+.upload-panel {
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.04);
+    margin-bottom: 16px;
+}
+.upload-limit {
+    color: #6b7280 !important;
+    font-size: 12px;
+    margin-top: 8px;
+}
+.uploaded-file {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534 !important;
+    padding: 7px 9px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 6px;
 }
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
@@ -596,24 +635,30 @@ manager = ManagerAgent(agents)
 # -----------------------------------------------------------------------------
 
 # Left-hand sidebar: document upload section
-st.sidebar.markdown("## Document Upload")
-st.sidebar.markdown("Upload evidence files")
+# This is intentionally placed in st.sidebar so it always appears on the left-hand side.
+with st.sidebar:
+    st.markdown('<div class="sidebar-title">Document Upload</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-subtitle">Upload evidence files</div>', unsafe_allow_html=True)
 
-uploaded_files = st.sidebar.file_uploader(
-    "Upload evidence files",
-    type=["pdf", "docx", "txt", "md"],
-    accept_multiple_files=True,
-    label_visibility="collapsed",
-)
+    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
+    uploaded_files = st.file_uploader(
+        "Upload evidence files",
+        type=["pdf", "docx", "txt", "md"],
+        accept_multiple_files=True,
+        help="Upload PDF, DOCX, TXT or MD evidence files for the agents to analyse.",
+    )
+    st.markdown('<div class="upload-limit">200MB per file • PDF, DOCX, TXT, MD</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-st.sidebar.markdown(
-    """
-<div class="upload-box">
-    <span class="small-muted">200MB per file • PDF, DOCX, TXT, MD</span>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+    if uploaded_files:
+        st.markdown("**Uploaded files**")
+        for uploaded_file in uploaded_files:
+            size_mb = uploaded_file.size / (1024 * 1024)
+            safe_name = html.escape(uploaded_file.name)
+            st.markdown(
+                f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
+                unsafe_allow_html=True,
+            )
 
 # Page header
 st.markdown(
