@@ -12,3 +12,4 @@ numpy
 python-dotenv
 google-cloud-aiplatform
 google-cloud-logging
+pillow
