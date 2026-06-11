@@ -123,7 +123,7 @@ section[data-testid="stSidebar"] h3 {
 .main-title {
     font-size: 34px;
     font-weight: 800;
-    color: #43a047;
+    color: #1e88e5;
     text-align: center;
     margin-bottom: 5px;
 }
@@ -671,6 +671,7 @@ st.markdown(
     """
 <div class="main-title">CMA Indigenous Governance AI Platform</div>
 <div class="subtitle">
+
 Empowering Indigenous Peoples' Rights, Cultures, Lands, Natural Resources, Languages and Futures.
 
 This platform aims to support all indigenous peoples in asserting their rights by analysing documents related to them, whether it is a state law that violates UNDRIP or an agreement between a state and a corporation to exploit their land resources, etc. This AI-powered web application can analyse the documents uploaded to the left sidebar and automatically generate a legal dossier, highlighting any violations of UNDRIP.
