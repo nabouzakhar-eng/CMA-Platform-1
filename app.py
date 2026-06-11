@@ -59,7 +59,9 @@ def get_gemini_api_key() -> str | None:
         pass
     return os.getenv("GEMINI_API_KEY")
 
-
+st.markdown("""
+<div class="main-title">CMA Indigenous Governance AI Platform</div>
+""", unsafe_allow_html=True)
 
 def render_government_style_banner() -> None:
     """Render the 1600x200px CMA banner if available, otherwise show a text fallback."""
@@ -274,15 +276,13 @@ section[data-testid="stSidebar"] h3 {
 
 /* Government-style hero banner - fits 1600x200 CMA banner */
 .hero-banner-card {
-    background: white;
+    background: transparent;
     padding: 0;
-    border-radius: 16px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
-    margin-bottom: 20px;
+    margin: 0 0 12px 0;
+    border: none;
+    box-shadow: none;
     overflow: hidden;
     max-width: 100%;
-    height: auto;
 }
 
 .hero-description {
