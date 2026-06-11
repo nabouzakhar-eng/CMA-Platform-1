@@ -213,6 +213,38 @@ section[data-testid="stSidebar"] h3 {
     box-shadow: 0 3px 12px rgba(0,0,0,0.05);
     margin-bottom: 15px;
 }
+
+
+/* Fixed visible left upload panel (not Streamlit sidebar) */
+.left-upload-panel {
+    background: #eef2f7;
+    border: 1px solid #dce3ea;
+    border-radius: 12px;
+    padding: 18px 16px;
+    margin-bottom: 12px;
+}
+.left-upload-panel h3 {
+    color: #1f2937;
+    font-size: 20px;
+    margin: 0 0 12px 0;
+    font-weight: 800;
+}
+.left-upload-subtitle {
+    color: #4b5563;
+    font-size: 13px;
+    margin: 0;
+}
+.upload-help-box {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px;
+    color: #6b7280;
+    font-size: 13px;
+    margin-top: 10px;
+    margin-bottom: 16px;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -634,32 +666,6 @@ manager = ManagerAgent(agents)
 # UI
 # -----------------------------------------------------------------------------
 
-# Left-hand sidebar: document upload section
-# This is intentionally placed in st.sidebar so it always appears on the left-hand side.
-with st.sidebar:
-    st.markdown('<div class="sidebar-title">Document Upload</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-subtitle">Upload evidence files</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
-    uploaded_files = st.file_uploader(
-        "Upload evidence files",
-        type=["pdf", "docx", "txt", "md"],
-        accept_multiple_files=True,
-        help="Upload PDF, DOCX, TXT or MD evidence files for the agents to analyse.",
-    )
-    st.markdown('<div class="upload-limit">200MB per file • PDF, DOCX, TXT, MD</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if uploaded_files:
-        st.markdown("**Uploaded files**")
-        for uploaded_file in uploaded_files:
-            size_mb = uploaded_file.size / (1024 * 1024)
-            safe_name = html.escape(uploaded_file.name)
-            st.markdown(
-                f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
-                unsafe_allow_html=True,
-            )
-
 # Page header
 st.markdown(
     """
@@ -671,48 +677,92 @@ Empowering Indigenous Peoples' Rights, Cultures, Lands, Natural Resources, Langu
     unsafe_allow_html=True,
 )
 
-# Main input form
-case_title = st.text_input("Case Title", "Indigenous Rights Case")
+# IMPORTANT:
+# We use a real left-hand page column for Document Upload instead of st.sidebar.
+# This guarantees the upload section is always visible on Streamlit Cloud, even if
+# the Streamlit sidebar is collapsed or hidden by the browser layout.
+left_panel, main_panel = st.columns([0.95, 5.05], gap="large")
 
-predefined_prompts = {
-    "Select a prompt": "",
-    "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
-    "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
-    "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
-    "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
-}
+with left_panel:
+    st.markdown(
+        """
+<div class="left-upload-panel">
+    <h3>Document Upload</h3>
+    <p class="left-upload-subtitle">Upload evidence files</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-if "query_text_area" not in st.session_state:
-    st.session_state.query_text_area = ""
+    uploaded_files = st.file_uploader(
+        "Upload evidence files",
+        type=["pdf", "docx", "txt", "md"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+        help="Upload PDF, DOCX, TXT or MD evidence files for the agents to analyse.",
+    )
 
+    st.markdown(
+        """
+<div class="upload-help-box">
+    <b>200MB per file</b><br>
+    PDF, DOCX, TXT, MD
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-def update_consultancy_request_from_predefined():
-    selected = st.session_state.predefined_prompt_selectbox
-    st.session_state.query_text_area = predefined_prompts.get(selected, "")
+    if uploaded_files:
+        st.markdown("**Uploaded files**")
+        for uploaded_file in uploaded_files:
+            size_mb = uploaded_file.size / (1024 * 1024)
+            safe_name = html.escape(uploaded_file.name)
+            st.markdown(
+                f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
+                unsafe_allow_html=True,
+            )
 
+with main_panel:
+    # Main input form
+    case_title = st.text_input("Case Title", "Indigenous Rights Case")
 
-st.selectbox(
-    "Choose a predefined consultancy request:",
-    list(predefined_prompts.keys()),
-    key="predefined_prompt_selectbox",
-    on_change=update_consultancy_request_from_predefined,
-)
+    predefined_prompts = {
+        "Select a prompt": "",
+        "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
+        "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
+        "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
+        "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
+    }
 
-query = st.text_area(
-    "Consultancy Request",
-    key="query_text_area",
-    height=160,
-)
+    if "query_text_area" not in st.session_state:
+        st.session_state.query_text_area = ""
 
-workflow_choice = st.selectbox(
-    "Workflow",
-    ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
-    key="workflow_selectbox",
-)
+    def update_consultancy_request_from_predefined():
+        selected = st.session_state.predefined_prompt_selectbox
+        st.session_state.query_text_area = predefined_prompts.get(selected, "")
 
-doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
+    st.selectbox(
+        "Choose a predefined consultancy request:",
+        list(predefined_prompts.keys()),
+        key="predefined_prompt_selectbox",
+        on_change=update_consultancy_request_from_predefined,
+    )
 
-run_button = st.button("Create Case, Index Documents & Run Agents")
+    query = st.text_area(
+        "Consultancy Request",
+        key="query_text_area",
+        height=160,
+    )
+
+    workflow_choice = st.selectbox(
+        "Workflow",
+        ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
+        key="workflow_selectbox",
+    )
+
+    doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
+
+    run_button = st.button("Create Case, Index Documents & Run Agents")
 
 # -----------------------------------------------------------------------------
 # Workflow execution
