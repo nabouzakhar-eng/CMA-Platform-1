@@ -64,94 +64,122 @@ st.markdown(
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
-.stApp { background: #f5f7fb; }
 
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #06264f 0%, #02152f 100%);
+.stApp {
+    background-color: #ffffff;
 }
-section[data-testid="stSidebar"] * { color: white !important; }
 
+/* Main app width / spacing */
+.block-container {
+    padding-top: 1.6rem;
+    padding-left: 4rem;
+    padding-right: 4rem;
+    max-width: 1400px;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #eef1f6;
+    border-right: 1px solid #e5e7eb;
+}
+section[data-testid="stSidebar"] * {
+    color: #1f2937 !important;
+}
+
+/* Header */
 .main-title {
-    font-size: 30px;
-    font-weight: 800;
-    color: #0b1f3a;
-    margin-bottom: 0.1rem;
+    font-size: 34px;
+    font-weight: 700;
+    color: #43a047;
+    text-align: center;
+    margin-bottom: 0.35rem;
 }
 .subtitle {
-    color: #2563eb;
-    font-size: 15px;
-    margin-bottom: 1.2rem;
+    color: #43a047;
+    font-size: 16px;
+    text-align: center;
+    margin-bottom: 2.2rem;
 }
-.card {
-    background: white;
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-    margin-bottom: 18px;
+
+/* Inputs */
+.stTextInput input,
+.stTextArea textarea {
+    background-color: #eaf7ec !important;
+    border: 1px solid #c8e6c9 !important;
+    border-radius: 7px !important;
 }
-.metric-card {
-    background: white;
-    border-radius: 16px;
-    padding: 18px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 5px 15px rgba(15, 23, 42, 0.05);
-    min-height: 100px;
+.stSelectbox div[data-baseweb="select"] > div {
+    background-color: #f1f3f7 !important;
+    border-radius: 7px !important;
 }
-.metric-number { font-size: 28px; font-weight: 800; color: #0b1f3a; }
-.metric-label { color: #64748b; font-size: 14px; }
-.workflow-card {
-    padding: 13px;
-    border-radius: 14px;
-    margin-bottom: 10px;
-    font-weight: 650;
-    border: 1px solid rgba(15, 23, 42, 0.06);
+
+/* Labels */
+label, .stMarkdown, p {
+    color: #1f2937;
 }
-.legal {background:#f3e8ff; color:#6b21a8;}
-.land {background:#dcfce7; color:#166534;}
-.climate {background:#dbeafe; color:#1d4ed8;}
-.full {background:#ffedd5; color:#c2410c;}
-.agent-box {
-    background: white;
-    border-left: 6px solid #2563eb;
-    padding: 16px;
-    border-radius: 14px;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-}
-.success-pill {
-    background: #dcfce7;
-    color: #166534;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    margin-left: 8px;
-}
-.confidence-pill {
-    background: #dbeafe;
-    color: #1d4ed8;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    margin-left: 8px;
-}
+
+/* Buttons */
 .stButton > button {
-    background: #2563eb;
-    color: white;
-    border-radius: 12px;
-    padding: 0.6rem 1.2rem;
-    font-weight: 700;
-    border: none;
+    background-color: #1e88e5 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    padding: 0.6rem 1.05rem !important;
+    font-weight: 600 !important;
+    border: none !important;
 }
+.stButton > button:hover {
+    background-color: #1565c0 !important;
+    color: white !important;
+}
+
+/* Download buttons */
 .stDownloadButton > button {
-    background: #16a34a;
-    color: white;
-    border-radius: 12px;
-    padding: 0.6rem 1.2rem;
+    background-color: #2e7d32 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    border: none !important;
+}
+
+/* Cards */
+.clean-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 18px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.03);
+}
+.section-title {
+    font-size: 24px;
     font-weight: 700;
-    border: none;
+    color: #1f2937;
+    margin-top: 1.8rem;
+    margin-bottom: 1rem;
+}
+.small-muted {
+    color: #6b7280;
+    font-size: 13px;
+}
+.report-card {
+    background: white;
+    border-left: 5px solid #43a047;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+}
+.upload-note {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px;
+    color: #6b7280;
+    font-size: 13px;
+}
+hr {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
 }
 </style>
 """,
@@ -573,110 +601,73 @@ manager = ManagerAgent(agents)
 # -----------------------------------------------------------------------------
 # UI
 # -----------------------------------------------------------------------------
+st.sidebar.markdown("## Document Upload")
+st.sidebar.markdown("Upload evidence files")
+
+uploaded_files = st.sidebar.file_uploader(
+    "Upload evidence files",
+    type=["pdf", "docx", "txt", "md"],
+    accept_multiple_files=True,
+    label_visibility="collapsed",
+)
+
 st.sidebar.markdown(
     """
-# 🌍 CMA
-### Indigenous Governance  
-### AI Platform
----
-🏠 Dashboard  
-📁 New Case / Consultation  
-📚 Documents  
-⚙️ Workflows  
-🤖 Agents  
-🗺️ Maps & Visuals  
-📄 Reports  
-⚖️ Legal Database  
-"""
+<div class="upload-note">
+200MB per file • PDF, DOCX, TXT, MD
+</div>
+""",
+    unsafe_allow_html=True,
 )
 
 st.markdown(
     """
 <div class="main-title">CMA Indigenous Governance AI Platform</div>
-<div class="subtitle">Empowering Imazighen Rights, Lands, Resources, Languages and Futures</div>
+<div class="subtitle">Empowering Indigenous Peoples' Rights, Cultures, Lands, Natural Resources, Languages and Futures</div>
 """,
     unsafe_allow_html=True,
 )
 
-cases_df, outputs_df = query_registry()
-metric_cols = st.columns(4)
-with metric_cols[0]:
-    st.markdown(f'<div class="metric-card"><div class="metric-label">Total Cases</div><div class="metric-number">{len(cases_df)}</div></div>', unsafe_allow_html=True)
-with metric_cols[1]:
-    st.markdown(f'<div class="metric-card"><div class="metric-label">Stored Outputs</div><div class="metric-number">{len(outputs_df)}</div></div>', unsafe_allow_html=True)
-with metric_cols[2]:
-    st.markdown('<div class="metric-card"><div class="metric-label">Agents</div><div class="metric-number">9</div></div>', unsafe_allow_html=True)
-with metric_cols[3]:
-    st.markdown('<div class="metric-card"><div class="metric-label">Workflows</div><div class="metric-number">4</div></div>', unsafe_allow_html=True)
+# Main form
+case_title = st.text_input("Case Title", "Indigenous Rights Case")
 
-st.write("")
-left, centre, right = st.columns([1.2, 2.2, 1])
+predefined_prompts = {
+    "Select a prompt": "",
+    "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
+    "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
+    "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
+    "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
+}
 
-with left:
-    st.markdown('<div class="card"><h4>1. Select Workflow</h4>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow-card legal">⚖️ Legal Workflow<br><small>Human rights, law, violations</small></div>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow-card land">🌿 Land-Rights Workflow<br><small>Land, resources, FPIC, agreements</small></div>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow-card climate">🌍 Climate-Risk Workflow<br><small>Environment, climate, biodiversity</small></div>', unsafe_allow_html=True)
-    st.markdown('<div class="workflow-card full">🏛️ Full Governance Workflow<br><small>All agents comprehensive analysis</small></div>', unsafe_allow_html=True)
-    workflow_choice = st.selectbox(
-        "Choose workflow",
-        ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
-        key="workflow_selectbox",
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+if "query_text_area" not in st.session_state:
+    st.session_state.query_text_area = ""
 
-    st.markdown('<div class="card"><h4>2. Upload Documents</h4>', unsafe_allow_html=True)
-    uploaded_files = st.file_uploader(
-        "Upload evidence files",
-        type=["pdf", "docx", "txt", "md"],
-        accept_multiple_files=True,
-    )
-    doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
-    st.markdown("</div>", unsafe_allow_html=True)
+def update_consultancy_request_from_predefined():
+    selected = st.session_state.predefined_prompt_selectbox
+    st.session_state.query_text_area = predefined_prompts.get(selected, "")
 
-with centre:
-    st.markdown('<div class="card"><h4>3. Your Consultation / Request</h4>', unsafe_allow_html=True)
-    case_title = st.text_input("Case Title", "Indigenous Rights Case")
+st.selectbox(
+    "Choose a predefined consultancy request:",
+    list(predefined_prompts.keys()),
+    key="predefined_prompt_selectbox",
+    on_change=update_consultancy_request_from_predefined,
+)
 
-    predefined_prompts = {
-        "Select a prompt": "",
-        "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
-        "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
-        "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
-        "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
-    }
+query = st.text_area(
+    "Consultancy Request",
+    key="query_text_area",
+    height=160,
+)
 
-    if "query_text_area" not in st.session_state:
-        st.session_state.query_text_area = ""
+workflow_choice = st.selectbox(
+    "Workflow",
+    ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
+    key="workflow_selectbox",
+)
 
-    def update_consultancy_request_from_predefined():
-        selected = st.session_state.predefined_prompt_selectbox
-        st.session_state.query_text_area = predefined_prompts.get(selected, "")
+doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
 
-    st.selectbox(
-        "Choose a predefined consultancy request",
-        list(predefined_prompts.keys()),
-        key="predefined_prompt_selectbox",
-        on_change=update_consultancy_request_from_predefined,
-    )
-    query = st.text_area("Consultancy Request", key="query_text_area", height=170)
-    run_button = st.button("▶ Run Analysis")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with right:
-    st.markdown(
-        """
-<div class="card">
-<h4>Available Tools</h4>
-<p>🌐 Search Web</p>
-<p>⚖️ Legal Database</p>
-<p>📁 Query Registry</p>
-<p>🗺️ Generate Map</p>
-<p>📄 Generate Reports</p>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+run_button = st.button("Create Case, Index Documents & Run Agents")
 
 # -----------------------------------------------------------------------------
 # Workflow execution
@@ -694,11 +685,13 @@ if run_button:
     with st.spinner("Initializing case and indexing documents..."):
         case_id = save_case(case_title, query, workflow_choice)
         st.session_state.current_case_id = case_id
+
         if uploaded_files:
             for f in uploaded_files:
                 text = extract_text_from_file(f)
                 if text.strip():
                     save_document(case_id, f.name, text, doc_type)
+
         VECTOR_STORE.rebuild()
         st.success("Documents indexed.")
 
@@ -719,38 +712,40 @@ if run_button:
 # Results
 # -----------------------------------------------------------------------------
 if st.session_state.workflow_completed:
-    st.markdown('<div class="card"><h3>Download Agent Reports</h3>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Download Agent Reports</div>', unsafe_allow_html=True)
+
     for r in st.session_state.current_agent_results:
         agent_name = r.get("agent", "Agent Report")
-        confidence = r.get("confidence", "not specified")
-        summary = html.escape(str(r.get("summary", ""))[:250])
+        confidence = r.get("confidence", "Not specified")
+        summary = html.escape(str(r.get("summary", ""))[:300])
         pdf_path = create_agent_pdf_report(st.session_state.current_case_id, r)
+
         st.markdown(
             f"""
-<div class="agent-box">
-<b>{html.escape(agent_name)}</b>
-<span class="success-pill">Completed</span>
-<span class="confidence-pill">Confidence: {html.escape(str(confidence))}</span>
-<br><br>{summary}...
+<div class="report-card">
+<b>{html.escape(agent_name)}</b><br>
+<span class="small-muted">Confidence: {html.escape(str(confidence))}</span><br><br>
+{summary}...
 </div>
 """,
             unsafe_allow_html=True,
         )
+
         with open(pdf_path, "rb") as pdf_file:
             st.download_button(
-                label=f"⬇ Download {agent_name} PDF",
+                label=f"Download {agent_name} PDF",
                 data=pdf_file,
                 file_name=os.path.basename(pdf_path),
                 mime="application/pdf",
                 key=f"download_{agent_name}_{st.session_state.current_case_id}",
             )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state.current_map_path:
-        st.subheader("Example Amazigh Libya Map")
+        st.markdown('<div class="section-title">Example Amazigh Libya Map</div>', unsafe_allow_html=True)
         components.html(Path(st.session_state.current_map_path).read_text(encoding="utf-8"), height=500)
 
 st.markdown("---")
+
 if st.button("Reset Workflow"):
     st.session_state.workflow_completed = False
     st.session_state.current_case_id = None
@@ -759,7 +754,6 @@ if st.button("Reset Workflow"):
     st.session_state.query_text_area = ""
     st.rerun()
 
-st.divider()
-st.subheader("Case Registry")
+st.markdown('<div class="section-title">Case Registry</div>', unsafe_allow_html=True)
 cases_df, _ = query_registry()
 st.dataframe(cases_df, use_container_width=True)
