@@ -66,7 +66,7 @@ def render_government_style_banner() -> None:
     if BANNER_IMAGE.exists():
         try:
             banner = Image.open(BANNER_IMAGE)
-            # The banner asset is designed at 1600 x 400 px.
+            # The banner asset is designed at 1600 x 200 px.
             st.markdown('<div class="hero-banner-card">', unsafe_allow_html=True)
             st.image(banner, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
