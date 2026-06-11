@@ -62,11 +62,11 @@ def get_gemini_api_key() -> str | None:
 
 
 def render_government_style_banner() -> None:
-    """Render the 1600x400px CMA banner if available, otherwise show a text fallback."""
+    """Render the 1600x200px CMA banner if available, otherwise show a text fallback."""
     if BANNER_IMAGE.exists():
         try:
             banner = Image.open(BANNER_IMAGE)
-            # The banner asset is designed at 1600 x 200 px.
+            # The banner asset is designed at 1600 x 400 px.
             st.markdown('<div class="hero-banner-card">', unsafe_allow_html=True)
             st.image(banner, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
