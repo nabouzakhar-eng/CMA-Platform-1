@@ -979,9 +979,7 @@ This platform represents an institutional Indigenous Intelligence system. The mo
 <li>UN Engagement Platform
 <li>Indigenous Diplomacy Platform
 </ul>
-<ul>
-<li>In practical terms, it becomes a digital Indigenous governance infrastructure capable of helping Indigenous Peoples protect their rights, territories, resources, languages, institutions and future generations using evidence-based analysis aligned with UNDRIP and international law.
-</ul>
+In practical terms, it becomes a digital Indigenous governance infrastructure capable of helping Indigenous Peoples protect their rights, territories, resources, languages, institutions and future generations using evidence-based analysis aligned with UNDRIP and international law.
 </div>
 </div>
 """,
