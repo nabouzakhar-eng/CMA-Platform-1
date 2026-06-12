@@ -298,8 +298,6 @@ section[data-testid="stSidebar"] h3 {
     line-height: 1.6;
 }
 
-
-
 </style>
 """,
     unsafe_allow_html=True,
