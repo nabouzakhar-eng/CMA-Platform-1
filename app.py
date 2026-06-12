@@ -844,7 +844,7 @@ with main_panel:
 
     workflow_choice = st.selectbox(
         "Workflow",
-        ["auto", "legal_workflow", "land_rights_workflow", "climate_risk_workflow", "full_governance_workflow"],
+        ["auto", "language_cluture_workflow", "land_rights_workflow", "climate_risk_workflow", "human_rights_workflow", "women_children_youth_workflow", "data_access_rights_workflow", "full_governance_workflow"],
         key="workflow_selectbox",
     )
 
