@@ -955,32 +955,30 @@ To use this application, you need to upload your documents, preferably with a co
 <br><br>
 The Key Benefits of this Platform are as follows:
 <ul>
-<li>- Automatically analyse state laws, policies, regulations and constitutional provisions
-<li>- Compare state actions against international Indigenous rights standards
-<li>- Generate legal briefs identifying areas of concern and assist in preparing litigation strategies
-<li>- Highlight clauses potentially conflicting with UNDRIP and identify a lack of Free, Prior and Informed Consent (FPIC) and absence of Indigenous consultation
-<li>- Analyse language policies, assess compliance with linguistic rights, and generate recommendations for language revitalisation and traditional knowledge preservation
-<li>- Analyse impacts of natural resources and mineral projects on Women, children, and youth, producing specialised reports, and identifying disproportionate impacts
-<li>- Generate evidence-based recommendations, assisting IPs in defending collective rights, such as land ownership or generate evidence for environmental complaints
-<li>- Support IPs by reviewing legislation, drafting local policies, preparing governance reports, monitoring development projects exploiting natural resources, and supporting their decision-making process
-<li>- Maintain Indigenous ownership of data and sensitive information, reduce dependence on external consultants, and build institutional memory
-<li>- Generate submissions for UN EMRIP, UNPFII, HR Council, and Special Rapporteurs
-<li>- Produce thematic reports, press releases, statements and interventions
-<li>- Visualise Indigenous territories and create evidence maps for advocacy
-<li>- Provide support for engagement with governments, corporations, and international organisations, generating dialogue, negotiation briefs, and partnership proposals
-<li>- Save cost and time. Tasks that normally require lawyers, researchers, environmental experts, and policy analysts can be completed in minutes rather than weeks or months, offering potential savings in terms of lowering legal preparation costs and faster response to emerging threats
+<li>Automatically analyse state laws, policies, regulations and constitutional provisions
+<li>Compare state actions against international Indigenous rights standards
+<li>Generate legal briefs identifying areas of concern and assist in preparing litigation strategies
+<li>Highlight clauses potentially conflicting with UNDRIP and identify a lack of Free, Prior and Informed Consent (FPIC) and absence of Indigenous consultation
+<li>Analyse language policies, assess compliance with linguistic rights, and generate recommendations for language revitalisation and traditional knowledge preservation
+<li>Analyse impacts of natural resources and mineral projects on Women, children, and youth, producing specialised reports, and identifying disproportionate impacts
+<li>Generate evidence-based recommendations, assisting IPs in defending collective rights, such as land ownership or generate evidence for environmental complaints
+<li>Support IPs by reviewing legislation, drafting local policies, preparing governance reports, monitoring development projects exploiting natural resources, and supporting their decision-making process
+<li>Maintain Indigenous ownership of data and sensitive information, reduce dependence on external consultants, and build institutional memory
+<li>Generate submissions for UN EMRIP, UNPFII, HR Council, and Special Rapporteurs
+<li>Produce thematic reports, press releases, statements and interventions
+<li>Visualise Indigenous territories and create evidence maps for advocacy
+<li>Provide support for engagement with governments, corporations, and international organisations, generating dialogue, negotiation briefs, and partnership proposals
+<li>Save cost and time. Tasks that normally require lawyers, researchers, environmental experts, and policy analysts can be completed in minutes rather than weeks or months, offering potential savings in terms of lowering legal preparation costs and faster response to emerging threats
 </ul>
-<br><br>
 This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
 <ul>
-<li>- Indigenous Knowledge Repository
-<li>- Governance Support System
-<li>- Legal Intelligence System
-<li>- Environmental Monitoring System
-<li>- UN Engagement Platform
-<li>- Indigenous Diplomacy Platform
+<li>Indigenous Knowledge Repository
+<li>Governance Support System
+<li>Legal Intelligence System
+<li>Environmental Monitoring System
+<li>UN Engagement Platform
+<li>Indigenous Diplomacy Platform
 </ul>
-<br><br>
 <ul>
 <li>In practical terms, it becomes a digital Indigenous governance infrastructure capable of helping Indigenous Peoples protect their rights, territories, resources, languages, institutions and future generations using evidence-based analysis aligned with UNDRIP and international law.
 </ul>
