@@ -795,14 +795,12 @@ with left_panel:
         help="Upload PDF, DOCX, TXT or MD evidence files for the agents to analyse.",
     )
 
-    st.markdown(
-        """
-<div class="upload-help-box">
-    <b>200MB per file</b><br>
-    PDF, DOCX, TXT, MD
-</div>
-""",
-        unsafe_allow_html=True,
+st.sidebar.markdown("""
+    <div class="upload-box">
+      <b>200MB per file</b><br>
+      PDF, DOCX, TXT, MD
+    </div>
+""", unsafe_allow_html=True)
     )
 
     if uploaded_files:
