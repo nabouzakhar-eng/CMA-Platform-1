@@ -574,7 +574,7 @@ def build_agents(model) -> dict[str, BaseAgent]:
         "data": BaseAgent("AI & Data Analytics Agent", "Structure evidence, detect patterns, identify data gaps, and support data sovereignty.", model),
         "climate": BaseAgent("Nature Conservation & Climate Change Agent", "Analyze environmental harm, water, pollution, biodiversity, climate risk, and ecological justice.", model),
         "youth": BaseAgent("Women, Children & Youth Agent", "Analyze participation, education, safeguarding, empowerment, and inclusion.", model),
-        "culture": BaseAgent("Language & Culture Agent", "Analyze Tamazight, Tifinagh, cultural rights, heritage, education, identity, and cultural survival.", model),
+        "culture": BaseAgent("Language & Culture Agent", "Analyze indigenous lanaguage, Analyze Tamazight, Tifinagh, cultural rights, heritage, education, identity, and cultural survival.", model),
         "citation": BaseAgent("Legal Citation Agent", "Map findings to UNDRIP, ICCPR, ICESCR, CERD, ACHPR, and Indigenous rights standards.", model),
         "reviewer": BaseAgent("Reviewer Agent", "Review outputs for hallucinations, weak evidence, legal risk, and missing citations.", model),
         "report": BaseAgent("Report Generation Agent", "Generate polished legal briefs, UN submissions, advocacy reports, and strategic dossiers.", model),
@@ -582,12 +582,14 @@ def build_agents(model) -> dict[str, BaseAgent]:
 
 
 WORKFLOWS = {
-    "legal_workflow": ["human", "citation", "reviewer", "report"],
+    "language_cluture_workflow": ["culture", "human", "citation", "reviewer", "report"],
     "land_rights_workflow": ["land", "human", "citation", "reviewer", "report"],
     "climate_risk_workflow": ["climate", "land", "human", "reviewer", "report"],
+    "human_rights_workflow": ["human", "citation", "reviewer", "report"],
+    "women_children_youth_workflow": ["youth", "human", "citation", "reviewer", "report"],
+    "data_access_rights_workflow": ["data", "human", "land", "climate", "youth", "culture", "citation", "reviewer", "report"],
     "full_governance_workflow": ["land", "human", "data", "climate", "youth", "culture", "citation", "reviewer", "report"],
 }
-
 
 class ManagerAgent:
     def __init__(self, agents: dict[str, BaseAgent]):
