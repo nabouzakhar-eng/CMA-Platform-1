@@ -327,6 +327,7 @@ def init_db() -> None:
             title TEXT,
             query TEXT,
             workflow TEXT,
+            output_type TEXT,
             status TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -355,17 +356,22 @@ def init_db() -> None:
         )
         """
     )
+
+    # Add output_type to existing databases created before this upgrade.
+    existing_columns = [row[1] for row in cur.execute("PRAGMA table_info(cases)").fetchall()]
+    if "output_type" not in existing_columns:
+        cur.execute("ALTER TABLE cases ADD COLUMN output_type TEXT")
     conn.commit()
     conn.close()
 
 
-def save_case(title: str, query: str, workflow: str) -> str:
+def save_case(title: str, query: str, workflow: str, output_type: str) -> str:
     case_id = str(uuid.uuid4())
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO cases (case_id,title,query,workflow,status) VALUES (?,?,?,?,?)",
-        (case_id, title, query, workflow, "running"),
+        "INSERT INTO cases (case_id,title,query,workflow,output_type,status) VALUES (?,?,?,?,?,?)",
+        (case_id, title, query, workflow, output_type, "running"),
     )
     conn.commit()
     conn.close()
@@ -514,17 +520,218 @@ def safe_json_response(model, prompt: str) -> dict:
         }
 
 
+
+OUTPUT_TEMPLATES = {
+    "Legal Dossier": """
+Produce a formal legal dossier with:
+1. Executive Summary
+2. Background and Facts
+3. Evidence Reviewed
+4. Potential UNDRIP Violations
+5. Legal Analysis
+6. Risks and Weaknesses
+7. Recommended Legal / Advocacy Actions
+8. Annex / Evidence List
+""",
+    "Legal Brief": """
+Produce a concise legal brief with:
+1. Issue Presented
+2. Relevant Facts
+3. Applicable Legal Standards
+4. Analysis
+5. Recommendations
+""",
+    "News Report": """
+Produce a balanced news report with:
+1. Headline
+2. Lead Paragraph
+3. Background
+4. Key Findings
+5. Stakeholder Impact
+6. Quotes / Suggested Statements
+7. Closing Context
+""",
+    "Press Release": """
+Produce a media-ready press release with:
+1. Headline
+2. Subheading
+3. Opening Paragraph
+4. Main Body
+5. Quote from Indigenous Representative
+6. Call to Action
+7. Contact / Notes to Editors
+""",
+    "Public Statement": """
+Produce a public statement with:
+1. Opening Position
+2. Main Concerns
+3. Rights-Based Argument
+4. Demands / Requests
+5. Closing Message
+""",
+    "UN Intervention": """
+Produce a UN-style oral intervention with:
+1. Chairperson Greeting
+2. Brief Context
+3. Key Rights Concern
+4. UNDRIP References
+5. Recommendations to States / UN Mechanisms
+6. Closing
+Keep it suitable for a 2-3 minute intervention.
+""",
+    "Thematic Report": """
+Produce a thematic report with:
+1. Executive Summary
+2. Theme and Scope
+3. Evidence Overview
+4. Patterns / Trends
+5. Legal and Human Rights Analysis
+6. Recommendations
+7. Conclusion
+""",
+    "FPIC Assessment": """
+Produce an FPIC assessment with:
+1. Project / Policy Overview
+2. Affected Indigenous Communities
+3. Consultation Process
+4. Free, Prior and Informed Consent Gaps
+5. UNDRIP Analysis
+6. Risk Rating
+7. Recommended Corrective Actions
+""",
+    "Land Rights Case File": """
+Produce a land rights case file with:
+1. Territorial Background
+2. Evidence of Land / Resource Impact
+3. Rights and Legal Issues
+4. State / Corporate Conduct
+5. Community Harms
+6. Recommended Case Strategy
+""",
+    "Environmental Impact Review": """
+Produce an environmental impact review with:
+1. Project Description
+2. Environmental Risks
+3. Water / Land / Biodiversity Impacts
+4. Indigenous Livelihood and Cultural Impacts
+5. Evidence Gaps
+6. Recommendations
+""",
+    "Municipal Governance Report": """
+Produce a municipal governance report with:
+1. Local Governance Context
+2. Key Issues for Municipal Authorities
+3. Legal and Policy Concerns
+4. Administrative Recommendations
+5. Implementation Steps
+""",
+    "Advocacy Brief": """
+Produce an advocacy brief with:
+1. Core Message
+2. Problem Statement
+3. Evidence Summary
+4. Rights-Based Argument
+5. Advocacy Demands
+6. Target Audiences
+""",
+    "Research Report": """
+Produce a research report with:
+1. Research Question
+2. Sources Reviewed
+3. Findings
+4. Analysis
+5. Limitations
+6. Recommendations
+""",
+    "Custom Report": """
+Produce a clear, structured report tailored to the user's request.
+"""
+}
+
+OUTPUT_TYPE_OPTIONS = list(OUTPUT_TEMPLATES.keys())
+
+
+def get_output_template(output_type: str) -> str:
+    return OUTPUT_TEMPLATES.get(output_type, OUTPUT_TEMPLATES["Custom Report"])
+
+
+def choose_workflow_from_doc_type(doc_type: str, query: str) -> str:
+    """Use the selected document type to improve automatic workflow routing."""
+    normalized = doc_type.lower().strip()
+
+    if normalized in [
+        "legal / constitution",
+        "law / regulation",
+        "human rights report",
+        "un submission",
+    ]:
+        return "human_rights_workflow"
+
+    if normalized in [
+        "oil & gas contract",
+        "mining contract",
+        "land rights document",
+    ]:
+        return "land_rights_workflow"
+
+    if normalized in [
+        "environmental impact assessment",
+    ]:
+        return "climate_risk_workflow"
+
+    if normalized in [
+        "language & culture",
+    ]:
+        return "language_culture_workflow"
+
+    if normalized in [
+        "women, children & youth",
+    ]:
+        return "women_children_youth_workflow"
+
+    if normalized in [
+        "data sovereignty / data access",
+    ]:
+        return "data_access_rights_workflow"
+
+    return ManagerAgent.choose_workflow(query)
+
+
+
 class BaseAgent:
     def __init__(self, name: str, role: str, model):
         self.name = name
         self.role = role
         self.model = model
 
-    def run(self, case_id: str, query: str, workflow: str, extra_context: str = "") -> dict:
+    def run(
+        self,
+        case_id: str,
+        query: str,
+        workflow: str,
+        output_type: str,
+        extra_context: str = "",
+    ) -> dict:
         evidence = VECTOR_STORE.search(query, k=5)
         evidence_text = "\n\n".join(
             f"Source: {e['filename']}\n{e['text']}" for e in evidence
         )
+        output_template = get_output_template(output_type)
+
+        if self.name == "Report Generation Agent":
+            agent_specific_instruction = f"""
+You are the final Report Generation Agent.
+Your task is to combine the outputs of previous specialist agents into one coherent {output_type}.
+Follow this output template carefully:
+{output_template}
+"""
+        else:
+            agent_specific_instruction = f"""
+Your analysis should support the final requested output type: {output_type}.
+Use this template as the final product direction:
+{output_template}
+"""
+
         prompt = f"""
 You are {self.name} for the CMA Indigenous Governance AI Platform.
 
@@ -533,6 +740,9 @@ ROLE:
 
 WORKFLOW:
 {workflow}
+
+REQUESTED OUTPUT TYPE:
+{output_type}
 
 TASK:
 {query}
@@ -543,16 +753,21 @@ RETRIEVED EVIDENCE:
 EXTRA CONTEXT FROM PREVIOUS AGENTS:
 {extra_context}
 
+AGENT-SPECIFIC INSTRUCTION:
+{agent_specific_instruction}
+
 RULES:
 - Use retrieved evidence where possible.
 - Do not invent facts.
 - Cite document filenames.
 - If evidence is missing, say so clearly.
+- Structure the response to support the requested output type.
 - Produce valid JSON only.
 
 JSON SCHEMA:
 {{
   "agent": "{self.name}",
+  "output_type": "{output_type}",
   "summary": "",
   "key_findings": [],
   "risks": [],
@@ -563,8 +778,10 @@ JSON SCHEMA:
 """
         output = safe_json_response(self.model, prompt)
         output["agent"] = self.name
+        output["output_type"] = output_type
         save_output(case_id, self.name, output)
         return output
+
 
 
 def build_agents(model) -> dict[str, BaseAgent]:
@@ -582,7 +799,8 @@ def build_agents(model) -> dict[str, BaseAgent]:
 
 
 WORKFLOWS = {
-    "language_cluture_workflow": ["culture", "human", "citation", "reviewer", "report"],
+    "legal_workflow": ["human", "citation", "reviewer", "report"],
+    "language_culture_workflow": ["culture", "human", "citation", "reviewer", "report"],
     "land_rights_workflow": ["land", "human", "citation", "reviewer", "report"],
     "climate_risk_workflow": ["climate", "land", "human", "reviewer", "report"],
     "human_rights_workflow": ["human", "citation", "reviewer", "report"],
@@ -606,12 +824,12 @@ class ManagerAgent:
             return "legal_workflow"
         return "full_governance_workflow"
 
-    def run(self, case_id: str, query: str, workflow: str) -> list[dict]:
+    def run(self, case_id: str, query: str, workflow: str, output_type: str) -> list[dict]:
         results = []
         context_chain = ""
         for key in WORKFLOWS[workflow]:
             agent = self.agents[key]
-            output = agent.run(case_id, query, workflow, context_chain)
+            output = agent.run(case_id, query, workflow, output_type, context_chain)
             results.append(output)
             context_chain += f"\n\nOutput from {agent.name}:\n{json.dumps(output, ensure_ascii=False)}"
         return results
@@ -637,11 +855,12 @@ def _register_pdf_font() -> str:
     return "Helvetica"
 
 
-def create_agent_pdf_report(case_id: str, agent_json: dict) -> str:
+def create_agent_pdf_report(case_id: str, agent_json: dict, output_type: str = "Report") -> str:
     font_name = _register_pdf_font()
     agent_name = agent_json.get("agent", "Agent Report")
     safe_agent_name = re.sub(r"[^A-Za-z0-9_-]+", "_", agent_name)
-    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_agent_name}.pdf"
+    safe_output_type = re.sub(r"[^A-Za-z0-9_-]+", "_", output_type)
+    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_output_type}_{safe_agent_name}.pdf"
 
     styles = getSampleStyleSheet()
     for style in styles.byName.values():
@@ -651,7 +870,9 @@ def create_agent_pdf_report(case_id: str, agent_json: dict) -> str:
     story = [
         Paragraph("CMA Indigenous Governance AI Platform", styles["Title"]),
         Spacer(1, 12),
-        Paragraph(html.escape(agent_name), styles["Heading1"]),
+        Paragraph(html.escape(output_type), styles["Heading1"]),
+        Spacer(1, 6),
+        Paragraph(html.escape(agent_name), styles["Heading2"]),
         Spacer(1, 12),
         Paragraph("Summary", styles["Heading2"]),
         Paragraph(html.escape(str(agent_json.get("summary", "No summary provided."))), styles["BodyText"]),
@@ -704,6 +925,7 @@ if "workflow_completed" not in st.session_state:
     st.session_state.current_case_id = None
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
+    st.session_state.current_output_type = None
 
 # -----------------------------------------------------------------------------
 # API key and model setup
@@ -727,7 +949,7 @@ render_government_style_banner()
 
 st.markdown(
     """
-<div class="hero-description" style="text-align:left;>
+<div class="hero-description" style="text-align:left;">
 <div class="subtitle">
 This platform aims to support Indigenous Peoples in asserting their rights by analysing documents related to them, whether it is a state law that violates UNDRIP or an agreement between a state and a corporation to exploit land and natural resources, etc. This AI-powered web application can analyse your uploaded documents and automatically generate legal dossiers and specialist reports highlighting potential violations of UNDRIP. Specialised AI Agents generate legal dossiers and reports that you can use, for indigenous municipalities, NGOs, legal advisers, and representatives to prepare advocacy documents, dialogue papers, evidence summaries, and future legal action.
 To use this application, you need to upload your documents, preferably with a copy of UNDRIP, select your preferred prompt from a ready-developed list, edit the request if needed, select the relevant workflow and document type, and then create your legal case, news report, press release, statement, intervention, or thematic report.
@@ -844,11 +1066,38 @@ with main_panel:
 
     workflow_choice = st.selectbox(
         "Workflow",
-        ["auto", "language_cluture_workflow", "land_rights_workflow", "climate_risk_workflow", "human_rights_workflow", "women_children_youth_workflow", "data_access_rights_workflow", "full_governance_workflow"],
+        ["auto", "language_culture_workflow", "land_rights_workflow", "climate_risk_workflow", "human_rights_workflow", "women_children_youth_workflow", "data_access_rights_workflow", "full_governance_workflow"],
         key="workflow_selectbox",
     )
 
-    doc_type = st.selectbox("Document Type", ["general", "legal", "environmental", "policy", "media"])
+    doc_type = st.selectbox(
+        "Document Type",
+        [
+            "General",
+            "Legal / Constitution",
+            "Law / Regulation",
+            "Oil & Gas Contract",
+            "Mining Contract",
+            "Land Rights Document",
+            "Environmental Impact Assessment",
+            "Human Rights Report",
+            "UN Submission",
+            "Municipal Policy",
+            "Language & Culture",
+            "Women, Children & Youth",
+            "Data Sovereignty / Data Access",
+            "Media Article",
+            "Research Report",
+            "Other",
+        ],
+    )
+
+    output_type = st.selectbox(
+        "Output Type",
+        OUTPUT_TYPE_OPTIONS,
+        index=OUTPUT_TYPE_OPTIONS.index("Legal Dossier"),
+        help="Choose the final product you want the platform to generate.",
+    )
 
     run_button = st.button("Create Case, Index Documents & Run Agents")
 
@@ -864,9 +1113,10 @@ if run_button:
     st.session_state.current_case_id = None
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
+    st.session_state.current_output_type = output_type
 
     with st.spinner("Initializing case and indexing documents..."):
-        case_id = save_case(case_title, query, workflow_choice)
+        case_id = save_case(case_title, query, workflow_choice, output_type)
         st.session_state.current_case_id = case_id
 
         if uploaded_files:
@@ -878,11 +1128,11 @@ if run_button:
         VECTOR_STORE.rebuild()
         st.success("Documents indexed.")
 
-    workflow = manager.choose_workflow(query) if workflow_choice == "auto" else workflow_choice
+    workflow = choose_workflow_from_doc_type(doc_type, query) if workflow_choice == "auto" else workflow_choice
     st.info(f"Selected workflow: {workflow}")
 
     with st.spinner("Running multi-agent workflow..."):
-        results = manager.run(case_id, query, workflow)
+        results = manager.run(case_id, query, workflow, output_type)
         st.session_state.current_agent_results = results
         st.success("Multi-agent workflow completed.")
 
@@ -901,7 +1151,7 @@ if st.session_state.workflow_completed:
         agent_name = r.get("agent", "Agent Report")
         confidence = r.get("confidence", "Not specified")
         summary = html.escape(str(r.get("summary", ""))[:300])
-        pdf_path = create_agent_pdf_report(st.session_state.current_case_id, r)
+        pdf_path = create_agent_pdf_report(st.session_state.current_case_id, r, r.get("output_type", "Report"))
 
         st.markdown(
             f"""
@@ -934,6 +1184,7 @@ if st.button("Reset Workflow"):
     st.session_state.current_case_id = None
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
+    st.session_state.current_output_type = None
     st.session_state.query_text_area = ""
     st.rerun()
 
