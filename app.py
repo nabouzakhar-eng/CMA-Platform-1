@@ -734,9 +734,7 @@ st.markdown("""
 This platform aims to support Indigenous Peoples in asserting their rights by analysing documents related to them, whether it is a state law that violates UNDRIP or an agreement between a state and a corporation to exploit land and natural resources, etc. This AI-powered web application can analyse your uploaded documents and automatically generate legal dossiers and specialist reports highlighting potential violations of UNDRIP. Specialised AI Agents generate legal dossiers and reports that you can use, for indigenous municipalities, NGOs, legal advisers, and representatives to prepare advocacy documents, dialogue papers, evidence summaries, and future legal action.
 
 To use this application, you need to upload your documents, preferably with a copy of UNDRIP, select your preferred prompt from a ready-developed list, edit the request if needed, select the relevant workflow and document type, and then create your legal case, news report, press release, statement, intervention, or thematic report.
-</div>
 
-<div class="subtitle">
 The Key Benefits of this Platform are as follows:
 - Automatically analyse state laws, policies, regulations and constitutional provisions.
 - Compare state actions against international Indigenous rights standards.
