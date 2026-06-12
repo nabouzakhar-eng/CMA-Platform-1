@@ -296,8 +296,6 @@ section[data-testid="stSidebar"] h3 {
     color: #1f2937;
     font-size: 15px;
     line-height: 1.6;
-
-    text-align: justify;
 }
 
 
