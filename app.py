@@ -1133,11 +1133,50 @@ with main_panel:
     case_title = st.text_input("Case Title", "Indigenous Rights Case")
 
     predefined_prompts = {
-        "Select a prompt": "",
-        "Analyze human rights violations in context of indigenous land rights": "Analyze human rights violations in context of indigenous land rights. Focus on forced displacement and lack of free, prior, and informed consent. Cite relevant UNDRIP articles.",
-        "Assess environmental impact of mining on indigenous territories": "Assess the environmental impact of a proposed mining project on indigenous territories. Identify potential ecological harm, water contamination risks, and impact on traditional livelihoods.",
-        "Examine cultural preservation efforts for endangered indigenous languages": "Examine existing efforts for the preservation of endangered indigenous languages. Discuss challenges and recommend strategies for revitalization, including education and community programs.",
-        "Review legal framework for indigenous data sovereignty": "Review the legal framework for indigenous data sovereignty. Highlight gaps in current legislation and propose mechanisms to ensure indigenous control over their data.",
+        "Select a professional consultation request": "",
+        "Indigenous Language & Culture Protection": """Analyse the attached documents to assess their impact on Indigenous language, cultural identity, education, traditional knowledge, cultural heritage, and collective rights. Identify any restrictions, risks, or opportunities affecting the preservation and promotion of Indigenous languages and cultures.
+
+Assess compliance with the United Nations Declaration on the Rights of Indigenous Peoples (UNDRIP), particularly Articles 8, 11, 13, 14, 15 and 31. Provide findings, risks, recommendations, and practical measures to strengthen Indigenous language revitalisation, cultural protection, education, and self-governance.""",
+        "Indigenous Land Rights Assessment": """Analyse the attached documents to determine their implications for Indigenous Peoples' rights to lands, territories, natural resources, water, minerals, forests, and traditional use areas.
+
+Identify potential violations of Indigenous land rights, resource governance principles, benefit-sharing obligations, and Free, Prior and Informed Consent (FPIC). Assess compliance with UNDRIP Articles 25, 26, 27, 28, 29 and 32.
+
+Provide a detailed legal and policy analysis, identify risks, highlight evidence, and recommend actions to protect Indigenous territorial rights and natural resource interests.""",
+        "Climate & Environmental Risk Assessment": """Analyse the attached documents to identify environmental, biodiversity, water, pollution, climate change, and ecological risks affecting Indigenous territories and communities.
+
+Assess potential impacts on traditional livelihoods, food security, cultural heritage, sacred sites, and ecosystem integrity. Evaluate compliance with UNDRIP, environmental law principles, environmental impact assessment standards, and Indigenous environmental rights.
+
+Generate a climate and environmental risk assessment, including findings, risk levels, mitigation measures, monitoring recommendations, and community protection strategies.""",
+        "Indigenous Human Rights Review": """Review the attached documents to identify actual or potential violations of Indigenous Peoples' human rights, collective rights, equality rights, cultural rights, political participation rights, and rights to self-determination.
+
+Assess compliance with UNDRIP, international human rights law, constitutional protections, and relevant regional human rights instruments. Identify discriminatory provisions, governance concerns, procedural violations, and barriers to Indigenous participation.
+
+Produce a professional human rights assessment, including legal findings, evidence, international standards, risks, and recommendations for corrective action.""",
+        "Women, Children & Youth Impact Assessment": """Analyse the attached documents to assess their implications for Indigenous women, children, youth, families, education, participation, health, safety, and social inclusion.
+
+Identify potential positive and negative impacts, including gender equality concerns, youth participation barriers, educational challenges, cultural continuity issues, and protection needs. Assess compliance with UNDRIP, child rights principles, gender equality standards, and Indigenous participation rights.
+
+Provide findings, risks, recommendations, and strategies to strengthen the meaningful participation and wellbeing of Indigenous women, children and youth.""",
+        "Indigenous Data Sovereignty Review": """Analyse the attached documents to assess Indigenous Peoples' rights relating to information access, data governance, data sovereignty, transparency, consultation, public participation, and access to decision-making processes.
+
+Identify restrictions on access to information, barriers to participation, weaknesses in transparency mechanisms, and risks relating to Indigenous knowledge, traditional knowledge, and community data.
+
+Assess compliance with UNDRIP, Indigenous Data Sovereignty principles, FPIC requirements, and international transparency standards. Provide recommendations for strengthening Indigenous control over information, knowledge systems, and governance data.""",
+        "Comprehensive Indigenous Governance Assessment": """Conduct a comprehensive multidisciplinary assessment of the attached documents from the perspectives of Indigenous governance, land rights, natural resources, language and culture, human rights, environmental protection, women and youth participation, and data sovereignty.
+
+Identify legal, governance, environmental, cultural, social, economic, and institutional implications affecting Indigenous Peoples. Assess compliance with UNDRIP and other relevant international standards, paying particular attention to self-determination, FPIC, territorial rights, cultural rights, participation, environmental stewardship, and Indigenous governance institutions.
+
+Produce an integrated governance report containing key findings, evidence, risk assessments, legal analysis, policy implications, recommendations, and strategic actions for Indigenous representatives, municipalities, NGOs, governments, and international organisations.""",
+    }
+
+    prompt_to_workflow = {
+        "Indigenous Language & Culture Protection": "language_culture_workflow",
+        "Indigenous Land Rights Assessment": "land_rights_workflow",
+        "Climate & Environmental Risk Assessment": "climate_risk_workflow",
+        "Indigenous Human Rights Review": "human_rights_workflow",
+        "Women, Children & Youth Impact Assessment": "women_children_youth_workflow",
+        "Indigenous Data Sovereignty Review": "data_access_rights_workflow",
+        "Comprehensive Indigenous Governance Assessment": "full_governance_workflow",
     }
 
     if "query_text_area" not in st.session_state:
@@ -1146,9 +1185,11 @@ with main_panel:
     def update_consultancy_request_from_predefined():
         selected = st.session_state.predefined_prompt_selectbox
         st.session_state.query_text_area = predefined_prompts.get(selected, "")
+        if selected in prompt_to_workflow:
+            st.session_state.workflow_selectbox = prompt_to_workflow[selected]
 
     st.selectbox(
-        "Choose a predefined consultancy request:",
+        "Choose a professional consultation request:",
         list(predefined_prompts.keys()),
         key="predefined_prompt_selectbox",
         on_change=update_consultancy_request_from_predefined,
