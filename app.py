@@ -521,138 +521,139 @@ def safe_json_response(model, prompt: str) -> dict:
 
 
 
-OUTPUT_TEMPLATES = {
-    "Legal Dossier": """
-Produce a formal legal dossier with:
-1. Executive Summary
-2. Background and Facts
-3. Evidence Reviewed
-4. Potential UNDRIP Violations
-5. Legal Analysis
-6. Risks and Weaknesses
-7. Recommended Legal / Advocacy Actions
-8. Annex / Evidence List
-""",
-    "Legal Brief": """
-Produce a concise legal brief with:
-1. Issue Presented
-2. Relevant Facts
-3. Applicable Legal Standards
-4. Analysis
-5. Recommendations
-""",
-    "News Report": """
-Produce a balanced news report with:
-1. Headline
-2. Lead Paragraph
-3. Background
-4. Key Findings
-5. Stakeholder Impact
-6. Quotes / Suggested Statements
-7. Closing Context
-""",
-    "Press Release": """
-Produce a media-ready press release with:
-1. Headline
-2. Subheading
-3. Opening Paragraph
-4. Main Body
-5. Quote from Indigenous Representative
-6. Call to Action
-7. Contact / Notes to Editors
-""",
-    "Public Statement": """
-Produce a public statement with:
-1. Opening Position
-2. Main Concerns
-3. Rights-Based Argument
-4. Demands / Requests
-5. Closing Message
-""",
-    "UN Intervention": """
-Produce a UN-style oral intervention with:
-1. Chairperson Greeting
-2. Brief Context
-3. Key Rights Concern
-4. UNDRIP References
-5. Recommendations to States / UN Mechanisms
-6. Closing
-Keep it suitable for a 2-3 minute intervention.
-""",
-    "Thematic Report": """
-Produce a thematic report with:
-1. Executive Summary
-2. Theme and Scope
-3. Evidence Overview
-4. Patterns / Trends
-5. Legal and Human Rights Analysis
-6. Recommendations
-7. Conclusion
-""",
-    "FPIC Assessment": """
-Produce an FPIC assessment with:
-1. Project / Policy Overview
-2. Affected Indigenous Communities
-3. Consultation Process
-4. Free, Prior and Informed Consent Gaps
-5. UNDRIP Analysis
-6. Risk Rating
-7. Recommended Corrective Actions
-""",
-    "Land Rights Case File": """
-Produce a land rights case file with:
-1. Territorial Background
-2. Evidence of Land / Resource Impact
-3. Rights and Legal Issues
-4. State / Corporate Conduct
-5. Community Harms
-6. Recommended Case Strategy
-""",
-    "Environmental Impact Review": """
-Produce an environmental impact review with:
-1. Project Description
-2. Environmental Risks
-3. Water / Land / Biodiversity Impacts
-4. Indigenous Livelihood and Cultural Impacts
-5. Evidence Gaps
-6. Recommendations
-""",
-    "Municipal Governance Report": """
-Produce a municipal governance report with:
-1. Local Governance Context
-2. Key Issues for Municipal Authorities
-3. Legal and Policy Concerns
-4. Administrative Recommendations
-5. Implementation Steps
-""",
-    "Advocacy Brief": """
-Produce an advocacy brief with:
-1. Core Message
-2. Problem Statement
-3. Evidence Summary
-4. Rights-Based Argument
-5. Advocacy Demands
-6. Target Audiences
-""",
-    "Research Report": """
-Produce a research report with:
-1. Research Question
-2. Sources Reviewed
-3. Findings
-4. Analysis
-5. Limitations
-6. Recommendations
-""",
-    "Custom Report": """
-Produce a clear, structured report tailored to the user's request.
-"""
+OUTPUT_STRUCTURES = {
+    "Legal Dossier": {
+        "purpose": "A formal evidence-based legal case dossier for lawyers, municipalities, Indigenous representatives and advocacy teams.",
+        "sections": [
+            "Executive Summary",
+            "Background and Context",
+            "Facts and Evidence Reviewed",
+            "Affected Indigenous Peoples / Communities",
+            "Potential UNDRIP Violations",
+            "Legal Analysis",
+            "Risks, Weaknesses and Evidence Gaps",
+            "Recommended Legal and Advocacy Actions",
+            "Annex / Evidence List",
+        ],
+    },
+    "News Report": {
+        "purpose": "A balanced journalistic news report suitable for public information and media publication.",
+        "sections": [
+            "Headline",
+            "Lead Paragraph",
+            "Background",
+            "Key Developments",
+            "Community Impact",
+            "Relevant Rights Context",
+            "Responses / Statements",
+            "Conclusion",
+        ],
+    },
+    "Press Release": {
+        "purpose": "A concise media-ready press release for public communication.",
+        "sections": [
+            "Headline",
+            "Subheading",
+            "Date and Location",
+            "Opening Paragraph",
+            "Main Body",
+            "Quote from Indigenous Representative",
+            "Call to Action",
+            "Contact / Notes to Editors",
+        ],
+    },
+    "Public Statement": {
+        "purpose": "A formal public statement expressing the position of Indigenous representatives or institutions.",
+        "sections": [
+            "Opening Position",
+            "Main Concerns",
+            "Rights-Based Argument",
+            "Demands / Requests",
+            "Call for Dialogue or Action",
+            "Closing Message",
+        ],
+    },
+    "UN Intervention": {
+        "purpose": "A concise oral intervention suitable for EMRIP, UNPFII, Human Rights Council or similar mechanisms.",
+        "sections": [
+            "Chairperson Greeting",
+            "Brief Context",
+            "Key Rights Concern",
+            "Relevant UNDRIP Articles",
+            "Recommendations to States / UN Mechanisms",
+            "Closing Statement",
+        ],
+    },
+    "Thematic Report": {
+        "purpose": "A structured thematic report analysing patterns, rights issues and recommendations.",
+        "sections": [
+            "Executive Summary",
+            "Theme and Scope",
+            "Evidence Overview",
+            "Patterns and Trends",
+            "Legal and Human Rights Analysis",
+            "Impact on Indigenous Peoples",
+            "Recommendations",
+            "Conclusion",
+        ],
+    },
+    "FPIC Assessment": {
+        "purpose": "A focused assessment of Free, Prior and Informed Consent compliance.",
+        "sections": [
+            "Project / Policy Overview",
+            "Affected Indigenous Communities",
+            "Consultation Process Reviewed",
+            "Free, Prior and Informed Consent Gaps",
+            "UNDRIP Analysis",
+            "Risk Rating",
+            "Recommended Corrective Actions",
+        ],
+    },
+    "Land Rights Case File": {
+        "purpose": "A land and natural resources case file for territorial claims, resource disputes or state-corporation agreements.",
+        "sections": [
+            "Case Summary",
+            "Territorial Background",
+            "Affected Community / Peoples",
+            "Land or Resource Issue",
+            "State / Corporate Conduct",
+            "Evidence of Harm or Risk",
+            "FPIC Concerns",
+            "Legal Basis",
+            "Requested Remedies",
+        ],
+    },
+    "Environmental Impact Review": {
+        "purpose": "A rights-based review of environmental, climate, water, biodiversity and livelihood impacts.",
+        "sections": [
+            "Project Description",
+            "Environmental Risks",
+            "Water / Land / Biodiversity Impacts",
+            "Indigenous Livelihood and Cultural Impacts",
+            "Evidence Gaps",
+            "Rights-Based Analysis",
+            "Recommendations",
+        ],
+    },
 }
 
-OUTPUT_TYPE_OPTIONS = list(OUTPUT_TEMPLATES.keys())
+OUTPUT_TYPE_OPTIONS = list(OUTPUT_STRUCTURES.keys())
+
+
+def get_output_structure(output_type: str) -> dict:
+    return OUTPUT_STRUCTURES.get(output_type, OUTPUT_STRUCTURES["Legal Dossier"])
 
 
 def get_output_template(output_type: str) -> str:
-    return OUTPUT_TEMPLATES.get(output_type, OUTPUT_TEMPLATES["Custom Report"])
+    structure = get_output_structure(output_type)
+    sections = "\n".join(f"{idx + 1}. {section}" for idx, section in enumerate(structure["sections"]))
+    return f"""
+Purpose:
+{structure["purpose"]}
+
+Required sections:
+{sections}
+"""
 
 
 def choose_workflow_from_doc_type(doc_type: str, query: str) -> str:
@@ -717,19 +718,63 @@ class BaseAgent:
             f"Source: {e['filename']}\n{e['text']}" for e in evidence
         )
         output_template = get_output_template(output_type)
+        output_structure = get_output_structure(output_type)
+        required_sections = output_structure["sections"]
 
         if self.name == "Report Generation Agent":
+            json_schema = f"""
+{{
+  "agent": "{self.name}",
+  "output_type": "{output_type}",
+  "title": "",
+  "summary": "",
+  "sections": [
+    {{"heading": "{required_sections[0]}", "content": ""}}
+  ],
+  "evidence": [],
+  "confidence": "low | medium | high"
+}}
+"""
             agent_specific_instruction = f"""
 You are the final Report Generation Agent.
-Your task is to combine the outputs of previous specialist agents into one coherent {output_type}.
-Follow this output template carefully:
+Your task is to combine the previous specialist agent outputs into ONE finished {output_type}.
+You must follow the requested output format exactly.
+
 {output_template}
+
+IMPORTANT FORMAT RULES:
+- Return a JSON object only.
+- The JSON must include a "sections" list.
+- Each item in "sections" must have "heading" and "content".
+- Use the exact section headings listed in the required sections.
+- Write the content in the tone appropriate to the output type.
+- Do not use the generic Summary / Key Findings / Risks / Actions format for the final report.
+- Cite document filenames inside the relevant section content where evidence supports a claim.
 """
         else:
+            json_schema = f"""
+{{
+  "agent": "{self.name}",
+  "output_type": "{output_type}",
+  "summary": "",
+  "key_findings": [],
+  "risks": [],
+  "actions": [],
+  "evidence": [],
+  "confidence": "low | medium | high"
+}}
+"""
             agent_specific_instruction = f"""
-Your analysis should support the final requested output type: {output_type}.
-Use this template as the final product direction:
+Your analysis supports the final requested output type: {output_type}.
+
+Final product direction:
 {output_template}
+
+As a specialist agent, keep your own response analytical:
+- Identify findings relevant to your expertise.
+- Identify risks and evidence gaps.
+- Recommend actions.
+- Cite document filenames.
 """
 
         prompt = f"""
@@ -756,32 +801,35 @@ EXTRA CONTEXT FROM PREVIOUS AGENTS:
 AGENT-SPECIFIC INSTRUCTION:
 {agent_specific_instruction}
 
-RULES:
+GENERAL RULES:
 - Use retrieved evidence where possible.
 - Do not invent facts.
 - Cite document filenames.
 - If evidence is missing, say so clearly.
-- Structure the response to support the requested output type.
 - Produce valid JSON only.
 
-JSON SCHEMA:
-{{
-  "agent": "{self.name}",
-  "output_type": "{output_type}",
-  "summary": "",
-  "key_findings": [],
-  "risks": [],
-  "actions": [],
-  "evidence": [],
-  "confidence": "low | medium | high"
-}}
+JSON SCHEMA TO FOLLOW:
+{json_schema}
 """
         output = safe_json_response(self.model, prompt)
         output["agent"] = self.name
         output["output_type"] = output_type
+
+        # If the report agent failed to create sections, create a fallback structure
+        # so the PDF still uses the selected output format.
+        if self.name == "Report Generation Agent" and "sections" not in output:
+            output["sections"] = [
+                {
+                    "heading": heading,
+                    "content": output.get("summary", "No information provided.")
+                    if idx == 0
+                    else "No information provided."
+                }
+                for idx, heading in enumerate(required_sections)
+            ]
+
         save_output(case_id, self.name, output)
         return output
-
 
 
 def build_agents(model) -> dict[str, BaseAgent]:
@@ -874,10 +922,59 @@ def create_agent_pdf_report(case_id: str, agent_json: dict, output_type: str = "
         Spacer(1, 6),
         Paragraph(html.escape(agent_name), styles["Heading2"]),
         Spacer(1, 12),
-        Paragraph("Summary", styles["Heading2"]),
-        Paragraph(html.escape(str(agent_json.get("summary", "No summary provided."))), styles["BodyText"]),
-        Spacer(1, 12),
     ]
+
+    # The Report Generation Agent uses output-specific sections.
+    # This is what makes Legal Dossiers, Press Releases, UN Interventions,
+    # News Reports, etc. look different in the final PDF.
+    if agent_name == "Report Generation Agent" and isinstance(agent_json.get("sections"), list):
+        title = agent_json.get("title")
+        if title:
+            story.append(Paragraph(html.escape(str(title)), styles["Heading1"]))
+            story.append(Spacer(1, 12))
+
+        summary = agent_json.get("summary")
+        if summary:
+            story.append(Paragraph("Summary", styles["Heading2"]))
+            story.append(Paragraph(html.escape(str(summary)), styles["BodyText"]))
+            story.append(Spacer(1, 12))
+
+        for section in agent_json.get("sections", []):
+            heading = section.get("heading", "Section") if isinstance(section, dict) else "Section"
+            content = section.get("content", "") if isinstance(section, dict) else str(section)
+            story.append(Paragraph(html.escape(str(heading)), styles["Heading2"]))
+
+            # Preserve simple line breaks in generated text.
+            for paragraph in str(content).split("\n"):
+                paragraph = paragraph.strip()
+                if paragraph:
+                    story.append(Paragraph(html.escape(paragraph), styles["BodyText"]))
+                    story.append(Spacer(1, 6))
+            story.append(Spacer(1, 8))
+
+        evidence_items = agent_json.get("evidence", [])
+        if evidence_items:
+            story.append(Paragraph("Evidence / Sources", styles["Heading2"]))
+            if isinstance(evidence_items, list):
+                for item in evidence_items:
+                    story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
+            else:
+                story.append(Paragraph(html.escape(str(evidence_items)), styles["BodyText"]))
+            story.append(Spacer(1, 10))
+
+        story.append(Paragraph("Confidence", styles["Heading2"]))
+        story.append(Paragraph(html.escape(str(agent_json.get("confidence", "Not specified."))), styles["BodyText"]))
+        doc.build(story)
+        return str(pdf_path)
+
+    # Specialist agents keep the analytical report format.
+    story.extend(
+        [
+            Paragraph("Summary", styles["Heading2"]),
+            Paragraph(html.escape(str(agent_json.get("summary", "No summary provided."))), styles["BodyText"]),
+            Spacer(1, 12),
+        ]
+    )
 
     for key, title in [
         ("key_findings", "Key Findings"),
