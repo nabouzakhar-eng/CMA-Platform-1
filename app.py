@@ -640,6 +640,208 @@ OUTPUT_STRUCTURES = {
 OUTPUT_TYPE_OPTIONS = list(OUTPUT_STRUCTURES.keys())
 
 
+MEDIA_OUTPUT_STRUCTURES = {
+    "Short Social Media Video Script": {
+        "purpose": "A 30-90 second script for TikTok, Instagram Reels, Facebook Reels or YouTube Shorts.",
+        "sections": [
+            "Video Title",
+            "Target Audience",
+            "Hook",
+            "Narration Script",
+            "Scene Breakdown",
+            "On-Screen Text",
+            "Visual Suggestions",
+            "Call to Action",
+            "Hashtags",
+        ],
+    },
+    "Documentary Video Script": {
+        "purpose": "A longer documentary-style advocacy video script based on the generated report.",
+        "sections": [
+            "Documentary Title",
+            "Purpose and Audience",
+            "Opening Scene",
+            "Narration Script",
+            "Historical / Legal Context",
+            "Key Evidence and Findings",
+            "Interview Questions",
+            "Suggested Visuals and B-Roll",
+            "Closing Message",
+        ],
+    },
+    "YouTube Content Package": {
+        "purpose": "A YouTube-ready package including script, title, description, chapters and tags.",
+        "sections": [
+            "YouTube Title",
+            "Video Description",
+            "Opening Hook",
+            "Full Video Script",
+            "Suggested Chapters",
+            "Thumbnail Text",
+            "Tags and Hashtags",
+            "Call to Action",
+        ],
+    },
+    "Advocacy Campaign Video": {
+        "purpose": "A campaign-style advocacy video designed for public mobilisation and institutional pressure.",
+        "sections": [
+            "Campaign Video Title",
+            "Campaign Objective",
+            "Target Audience",
+            "Key Message",
+            "Narration Script",
+            "Scene-by-Scene Plan",
+            "Evidence to Highlight",
+            "Visual Identity Suggestions",
+            "Call to Action",
+        ],
+    },
+    "Speech Video Script": {
+        "purpose": "A speech-to-camera or conference-style video script for representatives and leaders.",
+        "sections": [
+            "Speech Title",
+            "Speaker Role",
+            "Opening Address",
+            "Main Speech Script",
+            "Key Rights References",
+            "Suggested Visual Slides",
+            "Speaking Notes",
+            "Closing Appeal",
+        ],
+    },
+    "AI Video Production Brief": {
+        "purpose": "A production-ready brief that can be copied into tools such as VideoExpress, HeyGen, Synthesia, Runway or similar platforms.",
+        "sections": [
+            "Video Objective",
+            "Recommended Video Type",
+            "Avatar / Presenter Instructions",
+            "Narration Script",
+            "Scene Prompts",
+            "Image / B-Roll Prompts",
+            "Subtitle Text",
+            "Music and Tone",
+            "Export Notes",
+        ],
+    },
+}
+
+MEDIA_OUTPUT_OPTIONS = list(MEDIA_OUTPUT_STRUCTURES.keys())
+
+
+def get_media_structure(media_type: str) -> dict:
+    return MEDIA_OUTPUT_STRUCTURES.get(media_type, MEDIA_OUTPUT_STRUCTURES["Short Social Media Video Script"])
+
+
+def get_media_template(media_type: str) -> str:
+    structure = get_media_structure(media_type)
+    sections = "\n".join(f"{idx + 1}. {section}" for idx, section in enumerate(structure["sections"]))
+    return f"""
+Purpose:
+{structure["purpose"]}
+
+Required sections:
+{sections}
+"""
+
+
+def extract_report_text(report_json: dict) -> str:
+    if not report_json:
+        return ""
+    parts = []
+    title = report_json.get("title")
+    summary = report_json.get("summary")
+    if title:
+        parts.append(f"Title: {title}")
+    if summary:
+        parts.append(f"Summary: {summary}")
+    sections = report_json.get("sections", [])
+    if isinstance(sections, list):
+        for section in sections:
+            if isinstance(section, dict):
+                parts.append(f"{section.get('heading', 'Section')}: {section.get('content', '')}")
+            else:
+                parts.append(str(section))
+    else:
+        for key in ["key_findings", "risks", "actions", "evidence"]:
+            value = report_json.get(key)
+            if value:
+                parts.append(f"{key}: {value}")
+    return "\n\n".join(parts)
+
+
+def generate_media_content(model, case_id: str, source_report: dict, media_type: str, target_platform: str, video_length: str) -> dict:
+    source_output_type = source_report.get("output_type", "Generated Report")
+    source_text = extract_report_text(source_report)
+    media_template = get_media_template(media_type)
+    required_sections = get_media_structure(media_type)["sections"]
+    json_schema = f"""
+{{
+  "agent": "Media Generator Agent",
+  "source_output_type": "{source_output_type}",
+  "media_type": "{media_type}",
+  "target_platform": "{target_platform}",
+  "video_length": "{video_length}",
+  "title": "",
+  "summary": "",
+  "sections": [
+    {{"heading": "{required_sections[0]}", "content": ""}}
+  ],
+  "production_notes": [],
+  "evidence": [],
+  "confidence": "low | medium | high"
+}}
+"""
+    prompt = f"""
+You are the Media Generator Agent for the ⵣ Indigenous Smart Governance Platform ⵣ.
+
+Your task is to transform the already-generated platform output into a professional media advocacy product.
+
+SOURCE OUTPUT TYPE:
+{source_output_type}
+
+REQUESTED MEDIA TYPE:
+{media_type}
+
+TARGET PLATFORM:
+{target_platform}
+
+VIDEO LENGTH:
+{video_length}
+
+SOURCE REPORT CONTENT:
+{source_text}
+
+MEDIA FORMAT TO FOLLOW:
+{media_template}
+
+RULES:
+- Use only the source report content as the evidence base.
+- Do not invent legal facts or new allegations.
+- Make the language public-facing, clear, persuasive and respectful.
+- Preserve Indigenous rights framing and UNDRIP references where relevant.
+- Include practical visual guidance for editors or AI video tools.
+- If evidence is limited, say so clearly.
+- Return valid JSON only.
+- Use the exact required section headings in a "sections" list.
+
+JSON SCHEMA TO FOLLOW:
+{json_schema}
+"""
+    output = safe_json_response(model, prompt)
+    output["agent"] = "Media Generator Agent"
+    output["media_type"] = media_type
+    output["source_output_type"] = source_output_type
+    output["target_platform"] = target_platform
+    output["video_length"] = video_length
+    if "sections" not in output:
+        output["sections"] = [
+            {"heading": heading, "content": output.get("summary", "No information provided.") if idx == 0 else "No information provided."}
+            for idx, heading in enumerate(required_sections)
+        ]
+    save_output(case_id, "Media Generator Agent", output)
+    return output
+
+
 def get_output_structure(output_type: str) -> dict:
     return OUTPUT_STRUCTURES.get(output_type, OUTPUT_STRUCTURES["Legal Dossier"])
 
@@ -999,6 +1201,83 @@ def create_agent_pdf_report(case_id: str, agent_json: dict, output_type: str = "
     return str(pdf_path)
 
 
+def create_media_pdf_report(case_id: str, media_json: dict) -> str:
+    font_name = _register_pdf_font()
+    media_type = media_json.get("media_type", "Media Package")
+    safe_media_type = re.sub(r"[^A-Za-z0-9_-]+", "_", media_type)
+    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_media_type}_Media_Generator_Agent.pdf"
+
+    styles = getSampleStyleSheet()
+    for style in styles.byName.values():
+        style.fontName = font_name
+
+    doc = SimpleDocTemplate(str(pdf_path), pagesize=A4)
+    story = [
+        Paragraph("ⵣ Indigenous Smart Governance Platform ⵣ", styles["Title"]),
+        Spacer(1, 12),
+        Paragraph(html.escape(media_type), styles["Heading1"]),
+        Spacer(1, 6),
+        Paragraph("Media Generator Agent", styles["Heading2"]),
+        Spacer(1, 12),
+    ]
+
+    title = media_json.get("title")
+    if title:
+        story.append(Paragraph(html.escape(str(title)), styles["Heading1"]))
+        story.append(Spacer(1, 12))
+
+    metadata = [
+        ("Source Output Type", media_json.get("source_output_type", "Not specified")),
+        ("Target Platform", media_json.get("target_platform", "Not specified")),
+        ("Video Length", media_json.get("video_length", "Not specified")),
+    ]
+    for label, value in metadata:
+        story.append(Paragraph(f"<b>{html.escape(label)}:</b> {html.escape(str(value))}", styles["BodyText"]))
+    story.append(Spacer(1, 12))
+
+    summary = media_json.get("summary")
+    if summary:
+        story.append(Paragraph("Summary", styles["Heading2"]))
+        story.append(Paragraph(html.escape(str(summary)), styles["BodyText"]))
+        story.append(Spacer(1, 12))
+
+    for section in media_json.get("sections", []):
+        heading = section.get("heading", "Section") if isinstance(section, dict) else "Section"
+        content = section.get("content", "") if isinstance(section, dict) else str(section)
+        story.append(Paragraph(html.escape(str(heading)), styles["Heading2"]))
+        for paragraph in str(content).split("\n"):
+            paragraph = paragraph.strip()
+            if paragraph:
+                story.append(Paragraph(html.escape(paragraph), styles["BodyText"]))
+                story.append(Spacer(1, 6))
+        story.append(Spacer(1, 8))
+
+    production_notes = media_json.get("production_notes", [])
+    if production_notes:
+        story.append(Paragraph("Production Notes", styles["Heading2"]))
+        if isinstance(production_notes, list):
+            for item in production_notes:
+                story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
+        else:
+            story.append(Paragraph(html.escape(str(production_notes)), styles["BodyText"]))
+        story.append(Spacer(1, 10))
+
+    evidence_items = media_json.get("evidence", [])
+    if evidence_items:
+        story.append(Paragraph("Evidence / Sources", styles["Heading2"]))
+        if isinstance(evidence_items, list):
+            for item in evidence_items:
+                story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
+        else:
+            story.append(Paragraph(html.escape(str(evidence_items)), styles["BodyText"]))
+        story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Confidence", styles["Heading2"]))
+    story.append(Paragraph(html.escape(str(media_json.get("confidence", "Not specified."))), styles["BodyText"]))
+    doc.build(story)
+    return str(pdf_path)
+
+
 def generate_map(case_id: str) -> str:
     locations = [
         {"name": "Zuwara", "lat": 32.9333, "lon": 12.0833},
@@ -1023,6 +1302,7 @@ if "workflow_completed" not in st.session_state:
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
     st.session_state.current_output_type = None
+    st.session_state.current_media_result = None
 
 # -----------------------------------------------------------------------------
 # API key and model setup
@@ -1253,6 +1533,7 @@ if run_button:
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
     st.session_state.current_output_type = output_type
+    st.session_state.current_media_result = None
 
     with st.spinner("Initializing case and indexing documents..."):
         case_id = save_case(case_title, query, workflow_choice, output_type)
@@ -1312,6 +1593,97 @@ if st.session_state.workflow_completed:
                 key=f"download_{agent_name}_{st.session_state.current_case_id}",
             )
 
+    st.markdown('<div class="section-title">Create Advocacy Media Content</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<div class="report-card">
+<b>Media Generator Agent</b><br>
+<span class="small-muted">Generate a video script, documentary script, YouTube package, campaign video plan, speech video, or AI video production brief from the final report.</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    final_report = None
+    for item in st.session_state.current_agent_results:
+        if item.get("agent") == "Report Generation Agent":
+            final_report = item
+            break
+    if final_report is None and st.session_state.current_agent_results:
+        final_report = st.session_state.current_agent_results[-1]
+
+    media_col1, media_col2, media_col3 = st.columns([2, 2, 1])
+    with media_col1:
+        selected_media_type = st.selectbox(
+            "Media Output Type",
+            MEDIA_OUTPUT_OPTIONS,
+            key="media_output_type_selectbox",
+        )
+    with media_col2:
+        selected_target_platform = st.selectbox(
+            "Target Platform",
+            [
+                "Instagram / Facebook Reels",
+                "TikTok",
+                "YouTube Shorts",
+                "YouTube Long Form",
+                "LinkedIn",
+                "Conference / Public Event",
+                "UN / International Mechanism",
+                "AI Video Tool such as VideoExpress / HeyGen / Synthesia",
+            ],
+            key="media_target_platform_selectbox",
+        )
+    with media_col3:
+        selected_video_length = st.selectbox(
+            "Length",
+            ["30-60 seconds", "60-90 seconds", "3 minutes", "5-10 minutes", "10-20 minutes"],
+            key="media_length_selectbox",
+        )
+
+    generate_media_button = st.button("Generate Media Advocacy Package")
+
+    if generate_media_button:
+        if not final_report:
+            st.error("No final report is available to transform into media content.")
+        else:
+            with st.spinner("Running Media Generator Agent..."):
+                media_result = generate_media_content(
+                    model,
+                    st.session_state.current_case_id,
+                    final_report,
+                    selected_media_type,
+                    selected_target_platform,
+                    selected_video_length,
+                )
+                st.session_state.current_media_result = media_result
+                st.success("Media advocacy package generated.")
+
+    if st.session_state.get("current_media_result"):
+        media_result = st.session_state.current_media_result
+        media_title = media_result.get("title") or media_result.get("media_type", "Media Advocacy Package")
+        st.markdown(
+            f"""
+<div class="report-card">
+<b>{html.escape(str(media_title))}</b><br>
+<span class="small-muted">{html.escape(str(media_result.get('media_type', 'Media Package')))} • {html.escape(str(media_result.get('target_platform', 'Target platform not specified')))}</span><br><br>
+{html.escape(str(media_result.get('summary', ''))[:300])}...
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        media_pdf_path = create_media_pdf_report(st.session_state.current_case_id, media_result)
+        with open(media_pdf_path, "rb") as media_pdf_file:
+            st.download_button(
+                label=f"Download {media_result.get('media_type', 'Media Package')} PDF",
+                data=media_pdf_file,
+                file_name=os.path.basename(media_pdf_path),
+                mime="application/pdf",
+                key=f"download_media_{st.session_state.current_case_id}",
+            )
+
+    st.info("Phase 2 AI video generation can later connect this production brief to tools such as VideoExpress, HeyGen, Synthesia or Runway. This release generates the professional script and production package first, keeping costs low and allowing human review before video rendering.")
+
     if st.session_state.current_map_path:
         st.markdown('<div class="section-title">Example Amazigh Libya Map</div>', unsafe_allow_html=True)
         components.html(Path(st.session_state.current_map_path).read_text(encoding="utf-8"), height=500)
@@ -1324,6 +1696,7 @@ if st.button("Reset Workflow"):
     st.session_state.current_agent_results = []
     st.session_state.current_map_path = None
     st.session_state.current_output_type = None
+    st.session_state.current_media_result = None
     st.session_state.query_text_area = ""
     st.rerun()
 
