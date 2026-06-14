@@ -28,7 +28,7 @@ from sentence_transformers import SentenceTransformer
 # Streamlit page config must be the first Streamlit command.
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Indigenous Smart Governance Platform",
+    page_title="ⵣ Indigenous Smart Governance Platform ⵣ",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -60,7 +60,7 @@ def get_gemini_api_key() -> str | None:
     return os.getenv("GEMINI_API_KEY")
 
 st.markdown("""
-<div class="main-title">Indigenous Smart Governance Platform</div>
+<div class="main-title">ⵣ Indigenous Smart Governance Platform ⵣ</div>
 """, unsafe_allow_html=True)
 
 def render_government_style_banner() -> None:
@@ -78,7 +78,7 @@ def render_government_style_banner() -> None:
 
 #   st.markdown(
 #        """
-# <div class="main-title">Indigenous Smart Governance Platform</div>
+# <div class="main-title">ⵣ Indigenous Smart Governance Platform ⵣ</div>
 # <div class="subtitle">Empowering Indigenous Peoples' Rights, Lands, Resources, Languages and Futures</div>
 # """,
 #        unsafe_allow_html=True,
@@ -778,7 +778,7 @@ As a specialist agent, keep your own response analytical:
 """
 
         prompt = f"""
-You are {self.name} for the Indigenous Smart Governance Platform.
+You are {self.name} for the ⵣ Indigenous Smart Governance Platform ⵣ.
 
 ROLE:
 {self.role}
@@ -916,7 +916,7 @@ def create_agent_pdf_report(case_id: str, agent_json: dict, output_type: str = "
 
     doc = SimpleDocTemplate(str(pdf_path), pagesize=A4)
     story = [
-        Paragraph("Indigenous Smart Governance Platform", styles["Title"]),
+        Paragraph("ⵣ Indigenous Smart Governance Platform ⵣ", styles["Title"]),
         Spacer(1, 12),
         Paragraph(html.escape(output_type), styles["Heading1"]),
         Spacer(1, 6),
