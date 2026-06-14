@@ -60,7 +60,7 @@ def get_gemini_api_key() -> str | None:
     return os.getenv("GEMINI_API_KEY")
 
 st.markdown("""
-<div class="main-title">CMA Indigenous Smart Governance Platform</div>
+<div class="main-title">Indigenous Smart Governance Platform</div>
 """, unsafe_allow_html=True)
 
 def render_government_style_banner() -> None:
@@ -78,7 +78,7 @@ def render_government_style_banner() -> None:
 
 #   st.markdown(
 #        """
-# <div class="main-title">CMA Indigenous Smart Governance Platform</div>
+# <div class="main-title">Indigenous Smart Governance Platform</div>
 # <div class="subtitle">Empowering Indigenous Peoples' Rights, Lands, Resources, Languages and Futures</div>
 # """,
 #        unsafe_allow_html=True,
