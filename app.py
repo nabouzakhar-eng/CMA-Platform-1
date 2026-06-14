@@ -642,7 +642,7 @@ OUTPUT_TYPE_OPTIONS = list(OUTPUT_STRUCTURES.keys())
 
 MEDIA_OUTPUT_STRUCTURES = {
     "Short Social Media Video Script": {
-        "purpose": "A 30-90 second script for TikTok, Instagram Reels, Facebook Reels or YouTube Shorts.",
+        "purpose": "A 3-5 minute script for Facebook Reels or YouTube Shorts.",
         "sections": [
             "Video Title",
             "Target Audience",
