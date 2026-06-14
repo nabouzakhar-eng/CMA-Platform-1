@@ -1077,7 +1077,7 @@ This platform represents an institutional Indigenous Intelligence system. The mo
 <li>Indigenous Diplomacy Platform
 </ul>
 In practical terms, it becomes a digital Indigenous governance infrastructure capable of helping Indigenous Peoples protect their rights, territories, resources, languages, institutions and future generations using evidence-based analysis aligned with UNDRIP and international law.
-<div>
+<br><br>
 Developed by the AI Tech Academy
 </div>
 </div>
