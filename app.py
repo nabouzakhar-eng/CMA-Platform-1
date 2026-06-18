@@ -1340,8 +1340,13 @@ Key Capabilities:
 """,
     unsafe_allow_html=True,
 )
-<br><br>
-<ul>
+st.markdown("""
+<ul style="
+font-size:18px;
+color:black;
+line-height:1.8;
+text-align:left;
+">
 <li>Analyse laws, policies, regulations and agreements
 <li>Identify potential violations of UNDRIP and FPIC
 <li>Review mining, oil, gas and infrastructure contracts
@@ -1359,7 +1364,13 @@ How to Use the Platform:
 """,
     unsafe_allow_html=True,
 )
-<ul>
+st.markdown("""
+<ul style="
+font-size:18px;
+color:black;
+line-height:1.8;
+text-align:left;
+">
 <li>Upload your documents
 <li>Select a consultancy request
 <li>Choose the relevant workflow
@@ -1377,7 +1388,13 @@ Key Benefits:
 """,
     unsafe_allow_html=True,
 )
-<ul>
+st.markdown("""
+<ul style="
+font-size:18px;
+colour: black;
+line-height:1.8;
+text-align: left;
+">
 <li>Faster legal and policy analysis
 <li>Reduced dependence on external consultants
 <li>Lower advocacy preparation costs
@@ -1387,7 +1404,13 @@ Key Benefits:
 <li>Institutional memory and governance continuity
 </ul>
 This platform is more than an AI assistant. It is designed as a permanent Indigenous Governance Infrastructure comprising:
-<ul>
+st.markdown("""
+<ul style="
+font-size:18px;
+colour: black;
+line-height:1.8;
+text-align: left;
+">
 <li>Indigenous Knowledge Repository
 <li>Legal Intelligence System
 <li>Governance Support System
@@ -1400,7 +1423,13 @@ st.markdown(
 <h2 style="font-size:28px; font-weight:700; color:black;">
 Advocacy & Media Studio, where users can automatically generate:
 </h2>
-<ul>
+st.markdown("""
+<ul style="
+font-size:18px;
+colour: black;
+line-height:1.8;
+text-align: left;
+">
 <li>Video Scripts
 <li>Documentary Scripts
 <li>Podcast Episodes
