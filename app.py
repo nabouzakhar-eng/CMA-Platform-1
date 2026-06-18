@@ -1364,8 +1364,7 @@ How to Use the Platform:
 """,
     unsafe_allow_html=True,
 )
-st.markdown(
-    """
+st.markdown("""
 <ul style="
 font-size:18px;
 color:black;
