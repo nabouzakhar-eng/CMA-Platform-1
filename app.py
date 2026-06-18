@@ -1328,14 +1328,16 @@ st.markdown(
     """
 <div class="hero-description" style="text-align:left;">
 An AI-powered governance, legal and advocacy platform designed to support Indigenous Peoples, municipalities, NGOs and representative institutions in protecting their rights, territories, natural resources, languages and future generations. The platform analyses documents, identifies potential violations of UNDRIP and international law, and generates legal, policy and advocacy outputs in minutes.
+</div>
+""",
+    unsafe_allow_html=True,
+)
 <br><br>
 st.markdown(
     """
 <h2 style="font-size:38px; font-weight:700; color:black;">
 Key Capabilities:
 </h2>
-""",
-    unsafe_allow_html=True)
 <ul>
 <li>Analyse laws, policies, regulations and agreements
 <li>Identify potential violations of UNDRIP and FPIC
