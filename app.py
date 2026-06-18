@@ -1356,6 +1356,9 @@ text-align:left;
 <li>Support Indigenous governance and decision-making
 <li>Create media content for campaigns and public awareness
 </ul>
+""",
+unsafe_allow_html=True,
+)
 st.markdown(
     """
 <h2 style="font-size:28px; font-weight:700; color:black;">
