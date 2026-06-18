@@ -1378,8 +1378,8 @@ text-align:left;
 <li>Generate your report
 <li>Download reports and advocacy materials
 </ul>
-This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
 <br><br>
+This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
 st.markdown(
     """
 <h2 style="font-size:28px; font-weight:700; color:black;">
@@ -1403,6 +1403,7 @@ text-align: left;
 <li>Protection of Indigenous knowledge and data sovereignty
 <li>Institutional memory and governance continuity
 </ul>
+<br><br>
 This platform is more than an AI assistant. It is designed as a permanent Indigenous Governance Infrastructure comprising:
 st.markdown("""
 <ul style="
@@ -1445,10 +1446,8 @@ In practical terms, it becomes a digital Indigenous governance infrastructure ca
 <br><br>
 Developed by the World Amazigh Congress (CMA) in collaboration with AI Tech Academy.
 </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+
+
 
 # IMPORTANT:
 # We use a real left-hand page column for Document Upload instead of st.sidebar.
