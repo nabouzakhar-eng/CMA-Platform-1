@@ -1381,7 +1381,6 @@ text-align:left;
 <li>Generate your report
 <li>Download reports and advocacy materials
 </ul>
-<br><br>
 This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
 """, unsafe_allow_html=True)
 st.markdown(
