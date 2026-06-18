@@ -1334,9 +1334,12 @@ An AI-powered governance, legal and advocacy platform designed to support Indige
 )
 st.markdown(
     """
-<h2 style="font-size:38px; font-weight:700; color:black;">
+<h2 style="font-size:28px; font-weight:700; color:black;">
 Key Capabilities:
 </h2>
+""",
+    unsafe_allow_html=True,
+)
 <ul>
 <li>Analyse laws, policies, regulations and agreements
 <li>Identify potential violations of UNDRIP and FPIC
@@ -1347,7 +1350,14 @@ Key Capabilities:
 <li>Support Indigenous governance and decision-making
 <li>Create media content for campaigns and public awareness
 </ul>
+st.markdown(
+    """
+<h2 style="font-size:28px; font-weight:700; color:black;">
 How to Use the Platform:
+</h2>
+""",
+    unsafe_allow_html=True,
+)
 <ul>
 <li>Upload your documents
 <li>Select a consultancy request
@@ -1358,7 +1368,14 @@ How to Use the Platform:
 </ul>
 This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
 <br><br>
+st.markdown(
+    """
+<h2 style="font-size:28px; font-weight:700; color:black;">
 Key Benefits:
+</h2>
+""",
+    unsafe_allow_html=True,
+)
 <ul>
 <li>Faster legal and policy analysis
 <li>Reduced dependence on external consultants
@@ -1377,9 +1394,11 @@ This platform is more than an AI assistant. It is designed as a permanent Indige
 <li>UN Engagement Platform
 <li>Indigenous Diplomacy Platform
 </ul>
-Advocacy & Media Studio
-<br><br>
-Where users can automatically generate:
+st.markdown(
+    """
+<h2 style="font-size:28px; font-weight:700; color:black;">
+Advocacy & Media Studio, where users can automatically generate:
+</h2>
 <ul>
 <li>Video Scripts
 <li>Documentary Scripts
