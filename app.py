@@ -1340,6 +1340,8 @@ Key Capabilities:
 """,
     unsafe_allow_html=True,
 )
+<br><br>
+<ul>
 <li>Analyse laws, policies, regulations and agreements
 <li>Identify potential violations of UNDRIP and FPIC
 <li>Review mining, oil, gas and infrastructure contracts
@@ -1348,6 +1350,7 @@ Key Capabilities:
 <li>Generate press releases, thematic reports and advocacy materials
 <li>Support Indigenous governance and decision-making
 <li>Create media content for campaigns and public awareness
+</ul>
 st.markdown(
     """
 <h2 style="font-size:28px; font-weight:700; color:black;">
