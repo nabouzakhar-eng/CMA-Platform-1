@@ -1332,7 +1332,6 @@ An AI-powered governance, legal and advocacy platform designed to support Indige
 """,
     unsafe_allow_html=True,
 )
-<br><br>
 st.markdown(
     """
 <h2 style="font-size:38px; font-weight:700; color:black;">
