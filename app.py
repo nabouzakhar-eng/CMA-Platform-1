@@ -1327,38 +1327,68 @@ render_government_style_banner()
 st.markdown(
     """
 <div class="hero-description" style="text-align:left;">
-This platform aims to support Indigenous Peoples in asserting their rights by analysing documents related to them, whether it is a state law that violates UNDRIP or an agreement between a state and a corporation to exploit land and natural resources, etc. This AI-powered web application can analyse your uploaded documents and automatically generate legal dossiers and specialist reports highlighting potential violations of UNDRIP. Specialised AI Agents generate legal dossiers and reports that you can use, for indigenous municipalities, NGOs, legal advisers, and representatives to prepare advocacy documents, dialogue papers, evidence summaries, and future legal action.
-To use this application, you need to upload your documents, preferably with a copy of UNDRIP, select your preferred prompt from a ready-developed list, edit the request if needed, select the relevant workflow and document type, and then create your legal case, news report, press release, statement, intervention, or thematic report.
+An AI-powered governance, legal and advocacy platform designed to support Indigenous Peoples, municipalities, NGOs and representative institutions in protecting their rights, territories, natural resources, languages and future generations. The platform analyses documents, identifies potential violations of UNDRIP and international law, and generates legal, policy and advocacy outputs in minutes.
 <br><br>
-The Key Benefits of this Platform are as follows:
+st.markdown("# Key Capabilities:")
+st.markdown("**Key Capabilities:**")
 <ul>
-<li>Automatically analyse state laws, policies, regulations and constitutional provisions
-<li>Compare state actions against international Indigenous rights standards
-<li>Generate legal briefs identifying areas of concern and assist in preparing litigation strategies
-<li>Highlight clauses potentially conflicting with UNDRIP and identify a lack of Free, Prior and Informed Consent (FPIC) and absence of Indigenous consultation
-<li>Analyse language policies, assess compliance with linguistic rights, and generate recommendations for language revitalisation and traditional knowledge preservation
-<li>Analyse impacts of natural resources and mineral projects on Women, children, and youth, producing specialised reports, and identifying disproportionate impacts
-<li>Generate evidence-based recommendations, assisting IPs in defending collective rights, such as land ownership or generate evidence for environmental complaints
-<li>Support IPs by reviewing legislation, drafting local policies, preparing governance reports, monitoring development projects exploiting natural resources, and supporting their decision-making process
-<li>Maintain Indigenous ownership of data and sensitive information, reduce dependence on external consultants, and build institutional memory
-<li>Generate submissions for UN EMRIP, UNPFII, HR Council, and Special Rapporteurs
-<li>Produce thematic reports, press releases, statements and interventions
-<li>Visualise Indigenous territories and create evidence maps for advocacy
-<li>Provide support for engagement with governments, corporations, and international organisations, generating dialogue, negotiation briefs, and partnership proposals
-<li>Save cost and time. Tasks that normally require lawyers, researchers, environmental experts, and policy analysts can be completed in minutes rather than weeks or months, offering potential savings in terms of lowering legal preparation costs and faster response to emerging threats
+<li>Analyse laws, policies, regulations and agreements
+<li>Identify potential violations of UNDRIP and FPIC
+<li>Review mining, oil, gas and infrastructure contracts
+<li>Generate legal dossiers and evidence summaries
+<li>Produce UN submissions and intervention statements
+<li>Generate press releases, thematic reports and advocacy materials
+<li>Support Indigenous governance and decision-making
+<li>Create media content for campaigns and public awareness
+</ul>
+How to Use the Platform:
+<ul>
+<li>Upload your documents
+<li>Select a consultancy request
+<li>Choose the relevant workflow
+<li>Select the desired output type
+<li>Generate your report
+<li>Download reports and advocacy materials
 </ul>
 This platform represents an institutional Indigenous Intelligence system. The most important benefit is that the system evolves from a simple AI assistant into a permanent institutional capability:
+<br><br>
+Key Benefits:
+<ul>
+<li>Faster legal and policy analysis
+<li>Reduced dependence on external consultants
+<li>Lower advocacy preparation costs
+<li>Stronger evidence-based decision making
+<li>Enhanced UN and international engagement
+<li>Protection of Indigenous knowledge and data sovereignty
+<li>Institutional memory and governance continuity
+</ul>
+This platform is more than an AI assistant. It is designed as a permanent Indigenous Governance Infrastructure comprising:
 <ul>
 <li>Indigenous Knowledge Repository
-<li>Governance Support System
 <li>Legal Intelligence System
+<li>Governance Support System
 <li>Environmental Monitoring System
 <li>UN Engagement Platform
 <li>Indigenous Diplomacy Platform
 </ul>
+Advocacy & Media Studio
+<br><br>
+Where users can automatically generate:
+<ul>
+<li>Video Scripts
+<li>Documentary Scripts
+<li>Podcast Episodes
+<li>YouTube Packages
+<li>Social Media Campaigns
+<li>Public Statements
+</ul>
+from any report generated by the platform.
+<br><br>
+Together, these capabilities support Indigenous Peoples in protecting their rights, territories, natural resources, languages, institutions and future generations through evidence-based analysis aligned with UNDRIP and international law.
+<br><br>
 In practical terms, it becomes a digital Indigenous governance infrastructure capable of helping Indigenous Peoples protect their rights, territories, resources, languages, institutions and future generations using evidence-based analysis aligned with UNDRIP and international law.
 <br><br>
-Developed by the AI Tech Academy
+Developed by the World Amazigh Congress (CMA) in collaboration with AI Tech Academy.
 </div>
 </div>
 """,
