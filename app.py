@@ -448,6 +448,7 @@ class VectorStore:
     def __init__(self):
         self.chunks: list[dict] = []
         self.index = None
+        self.embeddings = None
 
     @staticmethod
     def chunk_text(text: str, chunk_size: int = 500, overlap: int = 80) -> list[str]:
@@ -463,14 +464,15 @@ class VectorStore:
     def rebuild(self) -> None:
         self.chunks = []
         conn = sqlite3.connect(DB_PATH)
-        rows = conn.execute("SELECT doc_id, filename, text, doc_type FROM documents").fetchall()
+        rows = conn.execute("SELECT doc_id, case_id, filename, text, doc_type FROM documents").fetchall()
         conn.close()
-        for doc_id, filename, text, doc_type in rows:
+        for doc_id, case_id, filename, text, doc_type in rows:
             for chunk in self.chunk_text(text or ""):
                 if chunk.strip():
                     self.chunks.append(
                         {
                             "doc_id": doc_id,
+                            "case_id": case_id,
                             "filename": filename,
                             "doc_type": doc_type,
                             "text": chunk,
@@ -478,19 +480,34 @@ class VectorStore:
                     )
         if not self.chunks:
             self.index = None
+            self.embeddings = None
             return
         embeddings = EMBED_MODEL.encode([c["text"] for c in self.chunks])
         embeddings = np.array(embeddings).astype("float32")
+        self.embeddings = embeddings
         self.index = faiss.IndexFlatL2(embeddings.shape[1])
         self.index.add(embeddings)
 
-    def search(self, query: str, k: int = 5) -> list[dict]:
-        if self.index is None or not self.chunks:
+    def search(self, query: str, k: int = 5, case_id: str | None = None) -> list[dict]:
+        if self.embeddings is None or not self.chunks:
             return []
         q_emb = EMBED_MODEL.encode([query])
         q_emb = np.array(q_emb).astype("float32")
-        _, indices = self.index.search(q_emb, min(k, len(self.chunks)))
-        return [self.chunks[i] for i in indices[0] if 0 <= i < len(self.chunks)]
+
+        # IMPORTANT: restrict retrieval to the current case when case_id is provided.
+        # Without this, old Libya documents from previous cases can be retrieved for
+        # a new Morocco case, causing the agents and maps to use the wrong country.
+        candidate_indices = [
+            i for i, chunk in enumerate(self.chunks)
+            if case_id is None or chunk.get("case_id") == case_id
+        ]
+        if not candidate_indices:
+            return []
+
+        candidate_embeddings = self.embeddings[candidate_indices]
+        distances = np.sum((candidate_embeddings - q_emb[0]) ** 2, axis=1)
+        ranked_positions = np.argsort(distances)[: min(k, len(candidate_indices))]
+        return [self.chunks[candidate_indices[pos]] for pos in ranked_positions]
 
 
 VECTOR_STORE = VectorStore()
@@ -915,7 +932,7 @@ class BaseAgent:
         output_type: str,
         extra_context: str = "",
     ) -> dict:
-        evidence = VECTOR_STORE.search(query, k=5)
+        evidence = VECTOR_STORE.search(query, k=5, case_id=case_id)
         evidence_text = "\n\n".join(
             f"Source: {e['filename']}\n{e['text']}" for e in evidence
         )
@@ -1278,16 +1295,154 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
     return str(pdf_path)
 
 
-def generate_map(case_id: str) -> str:
-    locations = [
-        {"name": "Zuwara", "lat": 32.9333, "lon": 12.0833},
-        {"name": "Nafusa Mountains", "lat": 31.9000, "lon": 11.9000},
-        {"name": "Ghadames", "lat": 30.1337, "lon": 9.5007},
-        {"name": "Ghat", "lat": 24.9633, "lon": 10.1800},
-    ]
-    m = folium.Map(location=[27.0, 17.0], zoom_start=5)
-    for loc in locations:
-        folium.Marker([loc["lat"], loc["lon"]], tooltip=loc["name"]).add_to(m)
+def _valid_lat_lon(lat, lon) -> bool:
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+        return -90 <= lat_f <= 90 and -180 <= lon_f <= 180
+    except Exception:
+        return False
+
+
+def generate_map_intelligence(model, case_id: str, query: str, output_type: str = "Map Intelligence") -> dict:
+    """Extract case-specific map locations from the query and uploaded evidence.
+
+    This replaces the old fixed Libya example map. The agent is designed to work
+    for any country or location by asking the model to extract place names and
+    provide approximate coordinates only when it has sufficient confidence.
+    """
+    evidence = VECTOR_STORE.search(query, k=8, case_id=case_id)
+    evidence_text = "\n\n".join(
+        f"Source: {e['filename']}\n{e['text']}" for e in evidence
+    )
+
+    json_schema = """
+{
+  "agent": "Map Intelligence Agent",
+  "summary": "",
+  "countries": [],
+  "regions": [],
+  "locations": [
+    {
+      "name": "",
+      "location_type": "country | region | town | village | mine | oil field | river | mountain | protected area | project site | other",
+      "country": "",
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "reason": "",
+      "evidence_source": "",
+      "confidence": "low | medium | high"
+    }
+  ],
+  "map_center": {"latitude": 0.0, "longitude": 0.0, "zoom": 5},
+  "evidence": [],
+  "confidence": "low | medium | high"
+}
+"""
+
+    prompt = f"""
+You are the Map Intelligence Agent for the ⵣ Indigenous Smart Governance Platform ⵣ.
+
+Your task is to create a case-specific map from the user's request and uploaded document evidence.
+
+TASK / USER REQUEST:
+{query}
+
+RETRIEVED DOCUMENT EVIDENCE:
+{evidence_text}
+
+INSTRUCTIONS:
+- Extract every relevant geographic location mentioned or strongly implied by the evidence.
+- This must work for any country or territory, not only Libya.
+- Include countries, regions, towns, villages, mines, oil/gas sites, rivers, mountains, project areas, Indigenous territories or affected zones.
+- Provide approximate latitude and longitude only where you are reasonably confident.
+- Do not invent project sites or allegations.
+- If an exact site is unclear, include the broader region or country and mark confidence as low or medium.
+- Prefer locations directly connected to the uploaded evidence and user request.
+- Return valid JSON only.
+
+JSON SCHEMA TO FOLLOW:
+{json_schema}
+"""
+
+    output = safe_json_response(model, prompt)
+    output["agent"] = "Map Intelligence Agent"
+
+    # Clean invalid coordinates so the map generator can safely ignore them.
+    clean_locations = []
+    for loc in output.get("locations", []) if isinstance(output.get("locations", []), list) else []:
+        if not isinstance(loc, dict):
+            continue
+        lat = loc.get("latitude")
+        lon = loc.get("longitude")
+        if _valid_lat_lon(lat, lon):
+            loc["latitude"] = float(lat)
+            loc["longitude"] = float(lon)
+            clean_locations.append(loc)
+    output["locations"] = clean_locations
+
+    if clean_locations:
+        avg_lat = sum(loc["latitude"] for loc in clean_locations) / len(clean_locations)
+        avg_lon = sum(loc["longitude"] for loc in clean_locations) / len(clean_locations)
+        output["map_center"] = {"latitude": avg_lat, "longitude": avg_lon, "zoom": 6 if len(clean_locations) > 1 else 8}
+    else:
+        output["map_center"] = {"latitude": 20.0, "longitude": 0.0, "zoom": 2}
+        output.setdefault("summary", "No reliable mappable locations were identified from the uploaded evidence.")
+
+    save_output(case_id, "Map Intelligence Agent", output)
+    return output
+
+
+def generate_map(case_id: str, map_data: dict | None = None) -> str:
+    """Generate a dynamic case-specific Folium map from Map Intelligence Agent JSON."""
+    map_data = map_data or {}
+    locations = map_data.get("locations", []) if isinstance(map_data, dict) else []
+    center = map_data.get("map_center", {}) if isinstance(map_data, dict) else {}
+
+    if locations:
+        start = [
+            float(center.get("latitude", locations[0].get("latitude", 20.0))),
+            float(center.get("longitude", locations[0].get("longitude", 0.0))),
+        ]
+        zoom = int(center.get("zoom", 6))
+    else:
+        start = [20.0, 0.0]
+        zoom = 2
+
+    m = folium.Map(location=start, zoom_start=zoom)
+
+    if locations:
+        for loc in locations:
+            lat = loc.get("latitude")
+            lon = loc.get("longitude")
+            if not _valid_lat_lon(lat, lon):
+                continue
+            name = html.escape(str(loc.get("name", "Mapped location")))
+            loc_type = html.escape(str(loc.get("location_type", "location")))
+            country = html.escape(str(loc.get("country", "")))
+            reason = html.escape(str(loc.get("reason", "")))
+            confidence = html.escape(str(loc.get("confidence", "not specified")))
+            source = html.escape(str(loc.get("evidence_source", "")))
+            popup = f"""
+            <b>{name}</b><br>
+            Type: {loc_type}<br>
+            Country: {country}<br>
+            Confidence: {confidence}<br>
+            Source: {source}<br>
+            <br>{reason}
+            """
+            folium.Marker(
+                [float(lat), float(lon)],
+                tooltip=name,
+                popup=folium.Popup(popup, max_width=320),
+            ).add_to(m)
+    else:
+        folium.Marker(
+            start,
+            tooltip="No precise case locations identified",
+            popup="No reliable mappable locations were identified from the uploaded evidence.",
+        ).add_to(m)
+
     map_path = MAP_STORE / f"case_{case_id}_map.html"
     m.save(str(map_path))
     return str(map_path)
@@ -1303,6 +1458,7 @@ if "workflow_completed" not in st.session_state:
     st.session_state.current_map_path = None
     st.session_state.current_output_type = None
     st.session_state.current_media_result = None
+    st.session_state.current_map_data = None
 
 # -----------------------------------------------------------------------------
 # API key and model setup
@@ -1638,6 +1794,7 @@ if run_button:
     st.session_state.current_map_path = None
     st.session_state.current_output_type = output_type
     st.session_state.current_media_result = None
+    st.session_state.current_map_data = None
 
     with st.spinner("Initializing case and indexing documents..."):
         case_id = save_case(case_title, query, workflow_choice, output_type)
@@ -1660,7 +1817,13 @@ if run_button:
         st.session_state.current_agent_results = results
         st.success("Multi-agent workflow completed.")
 
-    st.session_state.current_map_path = generate_map(case_id)
+    with st.spinner("Running Map Intelligence Agent..."):
+        map_data = generate_map_intelligence(model, case_id, query, output_type)
+        st.session_state.current_map_data = map_data
+        st.session_state.current_map_path = generate_map(case_id, map_data)
+        mapped_count = len(map_data.get("locations", [])) if isinstance(map_data, dict) else 0
+        st.success(f"Map generated with {mapped_count} case-specific location(s).")
+
     update_case_status(case_id, "completed")
     st.session_state.workflow_completed = True
     st.rerun()
@@ -1789,7 +1952,10 @@ if st.session_state.workflow_completed:
     st.info("Phase 2 AI video generation can later connect this production brief to tools such as VideoExpress, HeyGen, Synthesia or Runway. This release generates the professional script and production package first, keeping costs low and allowing human review before video rendering.")
 
     if st.session_state.current_map_path:
-        st.markdown('<div class="section-title">Example Amazigh Libya Map</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Case-Specific Map Intelligence</div>', unsafe_allow_html=True)
+        map_data = st.session_state.get("current_map_data") or {}
+        map_summary = html.escape(str(map_data.get("summary", "Map generated from locations identified in the case evidence."))) if isinstance(map_data, dict) else "Map generated."
+        st.markdown(f'<div class="report-card"><b>Map Intelligence Agent</b><br>{map_summary}</div>', unsafe_allow_html=True)
         components.html(Path(st.session_state.current_map_path).read_text(encoding="utf-8"), height=500)
 
 st.markdown("---")
@@ -1801,6 +1967,7 @@ if st.button("Reset Workflow"):
     st.session_state.current_map_path = None
     st.session_state.current_output_type = None
     st.session_state.current_media_result = None
+    st.session_state.current_map_data = None
     st.session_state.query_text_area = ""
     st.rerun()
 
