@@ -4,6 +4,9 @@ import os
 import re
 import sqlite3
 import uuid
+import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from PIL import Image
 
@@ -1295,6 +1298,7 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
     return str(pdf_path)
 
 
+
 def _valid_lat_lon(lat, lon) -> bool:
     try:
         lat_f = float(lat)
@@ -1304,91 +1308,311 @@ def _valid_lat_lon(lat, lon) -> bool:
         return False
 
 
-def generate_map_intelligence(model, case_id: str, query: str, output_type: str = "Map Intelligence") -> dict:
-    """Extract case-specific map locations from the query and uploaded evidence.
+# -----------------------------------------------------------------------------
+# Simple Location Extraction Map Intelligence - NO GEMINI REQUIRED
+# -----------------------------------------------------------------------------
+GEOCODE_CACHE_PATH = MAP_STORE / "geocode_cache.json"
 
-    This replaces the old fixed Libya example map. The agent is designed to work
-    for any country or location by asking the model to extract place names and
-    provide approximate coordinates only when it has sufficient confidence.
-    """
-    evidence = VECTOR_STORE.search(query, k=8, case_id=case_id)
-    evidence_text = "\n\n".join(
-        f"Source: {e['filename']}\n{e['text']}" for e in evidence
-    )
+LOCATION_GAZETTEER = {
+    "Morocco": (31.7917, -7.0926, "Morocco", "country"),
+    "Libya": (26.3351, 17.2283, "Libya", "country"),
+    "Algeria": (28.0339, 1.6596, "Algeria", "country"),
+    "Tunisia": (33.8869, 9.5375, "Tunisia", "country"),
+    "Mali": (17.5707, -3.9962, "Mali", "country"),
+    "Niger": (17.6078, 8.0817, "Niger", "country"),
+    "Mauritania": (21.0079, -10.9408, "Mauritania", "country"),
+    "Western Sahara": (24.2155, -12.8858, "Western Sahara", "territory"),
+    "Tamazgha": (28.0, 3.0, "North Africa", "region"),
+    "North Africa": (28.0, 3.0, "North Africa", "region"),
 
-    json_schema = """
-{
-  "agent": "Map Intelligence Agent",
-  "summary": "",
-  "countries": [],
-  "regions": [],
-  "locations": [
-    {
-      "name": "",
-      "location_type": "country | region | town | village | mine | oil field | river | mountain | protected area | project site | other",
-      "country": "",
-      "latitude": 0.0,
-      "longitude": 0.0,
-      "reason": "",
-      "evidence_source": "",
-      "confidence": "low | medium | high"
-    }
-  ],
-  "map_center": {"latitude": 0.0, "longitude": 0.0, "zoom": 5},
-  "evidence": [],
-  "confidence": "low | medium | high"
+    # Morocco / Amazigh and mining locations
+    "Rabat": (34.0209, -6.8416, "Morocco", "city"),
+    "Casablanca": (33.5731, -7.5898, "Morocco", "city"),
+    "Marrakech": (31.6295, -7.9811, "Morocco", "city"),
+    "Agadir": (30.4278, -9.5981, "Morocco", "city"),
+    "Ouarzazate": (30.9335, -6.9370, "Morocco", "city"),
+    "Tinghir": (31.5147, -5.5328, "Morocco", "town"),
+    "Tinerhir": (31.5147, -5.5328, "Morocco", "town"),
+    "Imider": (31.3752, -5.7933, "Morocco", "mine/project site"),
+    "Imiter": (31.3752, -5.7933, "Morocco", "mine/project site"),
+    "Bou Azzer": (30.5147, -6.8797, "Morocco", "mine/project site"),
+    "Jbel Saghro": (31.0000, -5.7500, "Morocco", "mountain/region"),
+    "Jebel Saghro": (31.0000, -5.7500, "Morocco", "mountain/region"),
+    "High Atlas": (31.0600, -7.9150, "Morocco", "mountain/region"),
+    "Middle Atlas": (33.0000, -5.0000, "Morocco", "mountain/region"),
+    "Anti-Atlas": (29.8000, -8.9000, "Morocco", "mountain/region"),
+    "Rif": (35.0000, -4.0000, "Morocco", "region"),
+    "Souss-Massa": (30.2751, -9.3087, "Morocco", "region"),
+    "Drâa-Tafilalet": (31.1499, -5.3939, "Morocco", "region"),
+    "Draa-Tafilalet": (31.1499, -5.3939, "Morocco", "region"),
+    "Khouribga": (32.8860, -6.9092, "Morocco", "city/mining area"),
+    "Youssoufia": (32.2463, -8.5294, "Morocco", "city/mining area"),
+    "Safi": (32.2994, -9.2372, "Morocco", "city/industrial area"),
+    "Jerada": (34.3100, -2.1600, "Morocco", "city/mining area"),
+    "Tiznit": (29.6974, -9.7316, "Morocco", "city"),
+    "Guelmim": (28.9870, -10.0574, "Morocco", "city"),
+    "Errachidia": (31.9314, -4.4244, "Morocco", "city"),
+    "Zagora": (30.3324, -5.8384, "Morocco", "city"),
+    "Taroudant": (30.4727, -8.8749, "Morocco", "city"),
+
+    # Libya / Amazigh locations
+    "Zuwara": (32.9333, 12.0833, "Libya", "city"),
+    "Zwara": (32.9333, 12.0833, "Libya", "city"),
+    "Nafusa Mountains": (31.9000, 11.9000, "Libya", "region"),
+    "Jabal Nafusa": (31.9000, 11.9000, "Libya", "region"),
+    "Ghadames": (30.1337, 9.5007, "Libya", "city"),
+    "Ghat": (24.9633, 10.1800, "Libya", "city"),
+    "Yefren": (32.0647, 12.5286, "Libya", "city"),
+    "Jadu": (31.9551, 12.0290, "Libya", "city"),
+    "Tripoli": (32.8872, 13.1913, "Libya", "city"),
+
+    # Wider Amazigh / Tuareg areas
+    "Kabylia": (36.5000, 4.5000, "Algeria", "region"),
+    "Tizi Ouzou": (36.7118, 4.0459, "Algeria", "city"),
+    "Bejaia": (36.7515, 5.0557, "Algeria", "city"),
+    "Tamanrasset": (22.7850, 5.5228, "Algeria", "city"),
+    "Ahaggar": (23.3000, 5.5333, "Algeria", "region"),
+    "Hoggar": (23.3000, 5.5333, "Algeria", "region"),
+    "Djerba": (33.8076, 10.8451, "Tunisia", "island"),
+    "Matmata": (33.5442, 9.9711, "Tunisia", "town"),
+    "Tataouine": (32.9297, 10.4518, "Tunisia", "city"),
+    "Azawad": (18.0000, -1.5000, "Mali", "region"),
+    "Kidal": (18.4411, 1.4078, "Mali", "city"),
+    "Timbuktu": (16.7666, -3.0026, "Mali", "city"),
+    "Agadez": (16.9742, 7.9865, "Niger", "city"),
+    "Arlit": (18.7369, 7.3853, "Niger", "city/mining area"),
 }
-"""
 
-    prompt = f"""
-You are the Map Intelligence Agent for the ⵣ Indigenous Smart Governance Platform ⵣ.
 
-Your task is to create a case-specific map from the user's request and uploaded document evidence.
+def _load_geocode_cache() -> dict:
+    try:
+        if GEOCODE_CACHE_PATH.exists():
+            return json.loads(GEOCODE_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
 
-TASK / USER REQUEST:
-{query}
 
-RETRIEVED DOCUMENT EVIDENCE:
-{evidence_text}
+def _save_geocode_cache(cache: dict) -> None:
+    try:
+        GEOCODE_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
-INSTRUCTIONS:
-- Extract every relevant geographic location mentioned or strongly implied by the evidence.
-- This must work for any country or territory, not only Libya.
-- Include countries, regions, towns, villages, mines, oil/gas sites, rivers, mountains, project areas, Indigenous territories or affected zones.
-- Provide approximate latitude and longitude only where you are reasonably confident.
-- Do not invent project sites or allegations.
-- If an exact site is unclear, include the broader region or country and mark confidence as low or medium.
-- Prefer locations directly connected to the uploaded evidence and user request.
-- Return valid JSON only.
 
-JSON SCHEMA TO FOLLOW:
-{json_schema}
-"""
+def _extract_case_text(case_id: str, query: str, max_chars: int = 20000) -> str:
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        "SELECT filename, text FROM documents WHERE case_id=? ORDER BY created_at DESC",
+        (case_id,),
+    ).fetchall()
+    conn.close()
+    parts = [query or ""]
+    for filename, text in rows:
+        parts.append(f"\nSource: {filename}\n{text or ''}")
+    return "\n\n".join(parts)[:max_chars]
 
-    output = safe_json_response(model, prompt)
-    output["agent"] = "Map Intelligence Agent"
 
-    # Clean invalid coordinates so the map generator can safely ignore them.
-    clean_locations = []
-    for loc in output.get("locations", []) if isinstance(output.get("locations", []), list) else []:
-        if not isinstance(loc, dict):
+def _extract_coordinate_locations(text: str) -> list[dict]:
+    locations = []
+    patterns = [
+        r"(?P<lat>-?\d{1,2}\.\d+)\s*,\s*(?P<lon>-?\d{1,3}\.\d+)",
+        r"lat(?:itude)?[:\s]+(?P<lat>-?\d{1,2}\.\d+)[,\s]+lon(?:gitude)?[:\s]+(?P<lon>-?\d{1,3}\.\d+)",
+    ]
+    seen = set()
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            lat = match.group("lat")
+            lon = match.group("lon")
+            if _valid_lat_lon(lat, lon):
+                key = (round(float(lat), 5), round(float(lon), 5))
+                if key not in seen:
+                    seen.add(key)
+                    locations.append({
+                        "name": f"Coordinates {lat}, {lon}",
+                        "location_type": "coordinates",
+                        "country": "",
+                        "latitude": float(lat),
+                        "longitude": float(lon),
+                        "reason": "Explicit coordinates found in the current case evidence or request.",
+                        "evidence_source": "Uploaded text / user query",
+                        "confidence": "high",
+                    })
+    return locations
+
+
+def _extract_gazetteer_locations(text: str) -> list[dict]:
+    locations = []
+    lower_text = text.lower()
+    seen = set()
+    for place, (lat, lon, country, loc_type) in LOCATION_GAZETTEER.items():
+        pattern = r"(?<![\wÀ-ÿ])" + re.escape(place.lower()) + r"(?![\wÀ-ÿ])"
+        if re.search(pattern, lower_text, flags=re.IGNORECASE):
+            key = (place.lower(), round(float(lat), 4), round(float(lon), 4))
+            if key in seen:
+                continue
+            seen.add(key)
+            locations.append({
+                "name": place,
+                "location_type": loc_type,
+                "country": country,
+                "latitude": float(lat),
+                "longitude": float(lon),
+                "reason": f"'{place}' was detected in the current case evidence or user request.",
+                "evidence_source": "Built-in gazetteer match",
+                "confidence": "high" if loc_type != "country" else "medium",
+            })
+    return locations
+
+
+def _extract_candidate_place_names(text: str, limit: int = 10) -> list[str]:
+    stopwords = {
+        "United Nations", "UNDRIP", "FPIC", "Human Rights", "Legal Dossier",
+        "Indigenous Peoples", "World Amazigh Congress", "Expert Mechanism",
+        "Article", "Articles", "State", "Company", "Government", "Report",
+        "The", "This", "That", "Analyse", "Analyze", "Platform", "Agent",
+    }
+    candidates = []
+    seen = set()
+    connector_pattern = r"\b(?:in|near|around|at|from|within|across|territory of|region of)\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+){0,3})"
+    for match in re.finditer(connector_pattern, text):
+        name = match.group(1).strip(" .,:;()[]")
+        if name and name not in stopwords and name.lower() not in seen:
+            seen.add(name.lower())
+            candidates.append(name)
+
+    title_pattern = r"\b([A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+){0,3})\b"
+    for match in re.finditer(title_pattern, text[:8000]):
+        name = match.group(1).strip(" .,:;()[]")
+        if len(name) < 3 or name in stopwords or any(ch.isdigit() for ch in name):
             continue
+        if name.lower() in seen:
+            continue
+        if any(word in name.lower() for word in ["rights", "article", "declaration", "platform", "agent", "legal", "indigenous"]):
+            continue
+        seen.add(name.lower())
+        candidates.append(name)
+        if len(candidates) >= limit:
+            break
+    return candidates[:limit]
+
+
+def _geocode_place_name(place_name: str) -> dict | None:
+    """Optional non-Gemini geocoding through OpenStreetMap Nominatim."""
+    place_name = place_name.strip()
+    if not place_name or len(place_name) < 3:
+        return None
+
+    cache = _load_geocode_cache()
+    cache_key = place_name.lower()
+    if cache_key in cache:
+        return cache[cache_key]
+
+    try:
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode({
+            "q": place_name,
+            "format": "json",
+            "limit": 1,
+        })
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "CMA-Indigenous-Governance-Platform/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        if data:
+            item = data[0]
+            result = {
+                "name": place_name,
+                "lat": float(item["lat"]),
+                "lon": float(item["lon"]),
+                "country": item.get("display_name", "").split(",")[-1].strip(),
+                "type": item.get("type", "location"),
+                "source": "OpenStreetMap Nominatim",
+            }
+            cache[cache_key] = result
+            _save_geocode_cache(cache)
+            time.sleep(1)
+            return result
+    except Exception:
+        return None
+    return None
+
+
+def _dedupe_locations(locations: list[dict]) -> list[dict]:
+    deduped = []
+    seen = set()
+    for loc in locations:
         lat = loc.get("latitude")
         lon = loc.get("longitude")
-        if _valid_lat_lon(lat, lon):
-            loc["latitude"] = float(lat)
-            loc["longitude"] = float(lon)
-            clean_locations.append(loc)
-    output["locations"] = clean_locations
+        name = str(loc.get("name", "")).strip()
+        if not name or not _valid_lat_lon(lat, lon):
+            continue
+        key = (name.lower(), round(float(lat), 3), round(float(lon), 3))
+        if key in seen:
+            continue
+        seen.add(key)
+        loc["latitude"] = float(lat)
+        loc["longitude"] = float(lon)
+        deduped.append(loc)
+    return deduped
 
-    if clean_locations:
-        avg_lat = sum(loc["latitude"] for loc in clean_locations) / len(clean_locations)
-        avg_lon = sum(loc["longitude"] for loc in clean_locations) / len(clean_locations)
-        output["map_center"] = {"latitude": avg_lat, "longitude": avg_lon, "zoom": 6 if len(clean_locations) > 1 else 8}
+
+def generate_map_intelligence(model, case_id: str, query: str, output_type: str = "Map Intelligence") -> dict:
+    """Generate case-specific map data without calling Gemini."""
+    case_text = _extract_case_text(case_id, query)
+
+    locations = []
+    locations.extend(_extract_coordinate_locations(case_text))
+    locations.extend(_extract_gazetteer_locations(case_text))
+
+    # Optional generic support for locations not in the built-in gazetteer.
+    existing_names = {str(loc.get("name", "")).lower() for loc in locations}
+    for candidate in _extract_candidate_place_names(case_text):
+        if candidate.lower() in existing_names:
+            continue
+        geocoded = _geocode_place_name(candidate)
+        if geocoded and _valid_lat_lon(geocoded.get("lat"), geocoded.get("lon")):
+            locations.append({
+                "name": geocoded["name"],
+                "location_type": geocoded.get("type", "location"),
+                "country": geocoded.get("country", ""),
+                "latitude": float(geocoded["lat"]),
+                "longitude": float(geocoded["lon"]),
+                "reason": f"'{candidate}' was detected as a possible location and geocoded without using Gemini.",
+                "evidence_source": geocoded.get("source", "Non-Gemini geocoder"),
+                "confidence": "medium",
+            })
+
+    locations = _dedupe_locations(locations)
+    countries = sorted({loc.get("country", "") for loc in locations if loc.get("country")})
+    regions = sorted({
+        loc.get("name", "") for loc in locations
+        if str(loc.get("location_type", "")).lower() in ["region", "mountain/region", "territory"]
+    })
+
+    if locations:
+        avg_lat = sum(loc["latitude"] for loc in locations) / len(locations)
+        avg_lon = sum(loc["longitude"] for loc in locations) / len(locations)
+        zoom = 5 if len(locations) > 3 else 6
+        summary = f"Map generated from {len(locations)} location(s) extracted from the current case evidence without using Gemini."
+        confidence = "medium"
     else:
-        output["map_center"] = {"latitude": 20.0, "longitude": 0.0, "zoom": 2}
-        output.setdefault("summary", "No reliable mappable locations were identified from the uploaded evidence.")
+        avg_lat, avg_lon, zoom = 20.0, 0.0, 2
+        summary = "No reliable mappable locations were identified from the current case evidence. A neutral world view is shown instead of a fixed Libya fallback."
+        confidence = "low"
 
+    output = {
+        "agent": "Map Intelligence Agent",
+        "summary": summary,
+        "countries": countries,
+        "regions": regions,
+        "locations": locations,
+        "map_center": {"latitude": avg_lat, "longitude": avg_lon, "zoom": zoom},
+        "evidence": [loc.get("evidence_source", "") for loc in locations if loc.get("evidence_source")],
+        "confidence": confidence,
+        "method": "simple_location_extraction_no_gemini",
+    }
     save_output(case_id, "Map Intelligence Agent", output)
     return output
 
@@ -1446,7 +1670,6 @@ def generate_map(case_id: str, map_data: dict | None = None) -> str:
     map_path = MAP_STORE / f"case_{case_id}_map.html"
     m.save(str(map_path))
     return str(map_path)
-
 
 # -----------------------------------------------------------------------------
 # Session state
