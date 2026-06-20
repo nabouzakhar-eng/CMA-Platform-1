@@ -1,5 +1,6 @@
 import html
 import json
+import base64
 import os
 import re
 import sqlite3
@@ -45,10 +46,12 @@ load_dotenv()
 DB_PATH = "cma_platform.db"
 MAP_STORE = Path("maps")
 REPORT_STORE = Path("reports")
+VIDEO_STORE = Path("videos")
 ASSET_STORE = Path("assets")
 BANNER_IMAGE = ASSET_STORE / "cma_banner.png"
 MAP_STORE.mkdir(exist_ok=True)
 REPORT_STORE.mkdir(exist_ok=True)
+VIDEO_STORE.mkdir(exist_ok=True)
 ASSET_STORE.mkdir(exist_ok=True)
 
 
@@ -839,6 +842,247 @@ def build_gemini_omni_payload(media_json: dict) -> dict:
         ],
     }
 
+
+
+
+# -----------------------------------------------------------------------------
+# Veo Video Generation Agent - Phase 3
+# -----------------------------------------------------------------------------
+def _get_secret_or_env(name: str, default: str | None = None) -> str | None:
+    """Read a setting from Streamlit secrets first, then environment variables."""
+    try:
+        value = st.secrets.get(name)
+        if value:
+            return str(value)
+    except Exception:
+        pass
+    return os.getenv(name, default)
+
+
+def _extract_section_content(package_json: dict, heading: str) -> str:
+    sections = package_json.get("sections", []) if isinstance(package_json, dict) else []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        if str(section.get("heading", "")).strip().lower() == heading.strip().lower():
+            return str(section.get("content", "")).strip()
+    return ""
+
+
+def build_veo_prompt_from_media_package(media_json: dict) -> str:
+    """Build one concise Veo-ready prompt from the Indigenous Media & Advocacy package."""
+    if not isinstance(media_json, dict):
+        return "Create a dignified Indigenous rights advocacy video based on the provided evidence."
+
+    prompt = _extract_section_content(media_json, "Primary Gemini Omni / Veo Prompt")
+    scene_prompts = _extract_section_content(media_json, "Scene Prompts")
+    narration = _extract_section_content(media_json, "Narration Script")
+    subtitles = _extract_section_content(media_json, "Subtitle Text")
+    branding = _extract_section_content(media_json, "CMA Branding Instructions")
+    safety = _extract_section_content(media_json, "Negative Prompt / Safety Constraints")
+
+    if not prompt:
+        prompt = media_json.get("summary") or media_json.get("title") or "Create a dignified Indigenous rights advocacy video."
+
+    parts = [
+        "Create a professional, dignified Indigenous rights advocacy video.",
+        f"Core prompt: {prompt}",
+    ]
+    if scene_prompts:
+        parts.append(f"Scene plan: {scene_prompts}")
+    if narration:
+        parts.append(f"Narration guidance: {narration}")
+    if subtitles:
+        parts.append(f"Subtitle guidance: {subtitles}")
+    if branding:
+        parts.append(f"Branding guidance: {branding}")
+    parts.append("Visual tone: serious, evidence-based, respectful, cinematic documentary style, natural light, no sensationalism.")
+    parts.append("Do not invent facts, locations, community statements, violence, victims, corporate names or legal conclusions not present in the source report.")
+    if safety:
+        parts.append(f"Additional safety constraints: {safety}")
+    return "\n\n".join(parts)
+
+
+def _gemini_api_predict_long_running(api_key: str, model_name: str, prompt: str, parameters: dict) -> dict:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:predictLongRunning?key={urllib.parse.quote(api_key)}"
+    payload = {
+        "instances": [{"prompt": prompt}],
+        "parameters": parameters,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="ignore"))
+
+
+def _vertex_predict_long_running(project_id: str, location: str, model_name: str, prompt: str, parameters: dict) -> dict:
+    """Call Vertex AI publisher model predictLongRunning using Application Default Credentials.
+
+    Streamlit Cloud setup option:
+    - Add GOOGLE_CLOUD_PROJECT, VEO_LOCATION and VEO_MODEL to secrets.
+    - Add GOOGLE_APPLICATION_CREDENTIALS_JSON as the full service-account JSON string.
+    """
+    try:
+        import google.auth
+        from google.auth.transport.requests import Request as GoogleAuthRequest
+    except Exception as exc:
+        raise RuntimeError(
+            "google-auth is required for Vertex AI Veo calls. Add google-auth to requirements.txt, "
+            "or use the Gemini API key mode."
+        ) from exc
+
+    service_json = _get_secret_or_env("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if service_json and not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        cred_path = VIDEO_STORE / "google_service_account.json"
+        cred_path.write_text(service_json, encoding="utf-8")
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path)
+
+    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    credentials.refresh(GoogleAuthRequest())
+    token = credentials.token
+
+    url = (
+        f"https://{location}-aiplatform.googleapis.com/v1/"
+        f"projects/{project_id}/locations/{location}/publishers/google/models/{model_name}:predictLongRunning"
+    )
+    payload = {
+        "instances": [{"prompt": prompt}],
+        "parameters": parameters,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="ignore"))
+
+
+def _poll_long_running_operation(operation: dict, api_mode: str, api_key: str | None, location: str | None, timeout_seconds: int = 900, poll_interval: int = 12) -> dict:
+    operation_name = operation.get("name")
+    if not operation_name:
+        return operation
+
+    start = time.time()
+    last_payload = operation
+    while time.time() - start < timeout_seconds:
+        if api_mode == "vertex":
+            try:
+                import google.auth
+                from google.auth.transport.requests import Request as GoogleAuthRequest
+            except Exception as exc:
+                raise RuntimeError("google-auth is required to poll Vertex AI operations.") from exc
+            credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            credentials.refresh(GoogleAuthRequest())
+            token = credentials.token
+            op_url = f"https://{location}-aiplatform.googleapis.com/v1/{operation_name}"
+            req = urllib.request.Request(op_url, headers={"Authorization": f"Bearer {token}"}, method="GET")
+        else:
+            op_name = operation_name
+            if op_name.startswith("operations/"):
+                op_url = f"https://generativelanguage.googleapis.com/v1beta/{op_name}?key={urllib.parse.quote(api_key or '')}"
+            else:
+                op_url = f"https://generativelanguage.googleapis.com/v1beta/{op_name}?key={urllib.parse.quote(api_key or '')}"
+            req = urllib.request.Request(op_url, method="GET")
+
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            last_payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        if last_payload.get("done"):
+            return last_payload
+        time.sleep(poll_interval)
+    return {"done": False, "name": operation_name, "last_payload": last_payload, "error": "Timed out while waiting for Veo video generation."}
+
+
+def _find_base64_video(obj) -> str | None:
+    """Search flexibly for base64 video bytes in Gemini/Veo operation responses."""
+    if isinstance(obj, dict):
+        for key in ["bytesBase64Encoded", "videoBytes", "bytes_base64_encoded"]:
+            value = obj.get(key)
+            if isinstance(value, str) and len(value) > 100:
+                return value
+        for value in obj.values():
+            found = _find_base64_video(value)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_base64_video(item)
+            if found:
+                return found
+    return None
+
+
+def generate_veo_video(case_id: str, media_json: dict, api_mode: str, model_name: str, duration_seconds: int, aspect_ratio: str, response_count: int = 1) -> dict:
+    """Dedicated Veo Video Generation Agent.
+
+    The agent runs after the Indigenous Media & Advocacy Agent. It uses the generated
+    media package as the source of truth, sends a concise prompt to Veo, polls the
+    long-running operation, and saves an MP4 file if video bytes are returned.
+    """
+    prompt = build_veo_prompt_from_media_package(media_json)
+    parameters = {
+        "sampleCount": int(response_count),
+        "durationSeconds": int(duration_seconds),
+        "aspectRatio": aspect_ratio,
+        "personGeneration": "allow_adult",
+    }
+
+    result = {
+        "agent": "Veo Video Generation Agent",
+        "status": "not_started",
+        "api_mode": api_mode,
+        "model_name": model_name,
+        "duration_seconds": duration_seconds,
+        "aspect_ratio": aspect_ratio,
+        "prompt_used": prompt,
+        "operation": None,
+        "video_path": None,
+        "error": None,
+    }
+
+    try:
+        if api_mode == "vertex":
+            project_id = _get_secret_or_env("GOOGLE_CLOUD_PROJECT") or _get_secret_or_env("GCP_PROJECT_ID")
+            location = _get_secret_or_env("VEO_LOCATION", "us-central1")
+            if not project_id:
+                raise RuntimeError("Set GOOGLE_CLOUD_PROJECT or GCP_PROJECT_ID in Streamlit secrets for Vertex AI Veo.")
+            operation = _vertex_predict_long_running(project_id, location, model_name, prompt, parameters)
+            final_operation = _poll_long_running_operation(operation, "vertex", None, location)
+        else:
+            api_key = get_gemini_api_key()
+            if not api_key:
+                raise RuntimeError("GEMINI_API_KEY is required for Gemini API Veo mode.")
+            operation = _gemini_api_predict_long_running(api_key, model_name, prompt, parameters)
+            final_operation = _poll_long_running_operation(operation, "gemini_api", api_key, None)
+
+        result["operation"] = final_operation
+        if final_operation.get("error"):
+            result["status"] = "failed"
+            result["error"] = json.dumps(final_operation.get("error"), ensure_ascii=False)
+        else:
+            b64_video = _find_base64_video(final_operation)
+            if b64_video:
+                video_path = VIDEO_STORE / f"case_{case_id}_veo_video.mp4"
+                video_path.write_bytes(base64.b64decode(b64_video))
+                result["status"] = "completed"
+                result["video_path"] = str(video_path)
+            else:
+                result["status"] = "completed_no_inline_video"
+                result["error"] = "Veo operation completed, but no inline base64 video bytes were found. Check the operation response or configure OUTPUT_STORAGE_URI/GCS output."
+    except Exception as exc:
+        result["status"] = "failed"
+        result["error"] = str(exc)
+
+    save_output(case_id, "Veo Video Generation Agent", result)
+    return result
 
 def generate_media_content(model, case_id: str, source_report: dict, media_type: str, target_platform: str, video_length: str, audience: str = "Indigenous Peoples, NGOs, municipalities, UN mechanisms and public audiences", language: str = "English") -> dict:
     source_output_type = source_report.get("output_type", "Generated Report")
@@ -1771,6 +2015,7 @@ if "workflow_completed" not in st.session_state:
     st.session_state.current_output_type = None
     st.session_state.current_media_result = None
     st.session_state.current_map_data = None
+    st.session_state.current_veo_result = None
 
 # -----------------------------------------------------------------------------
 # API key and model setup
@@ -2107,6 +2352,7 @@ if run_button:
     st.session_state.current_output_type = output_type
     st.session_state.current_media_result = None
     st.session_state.current_map_data = None
+    st.session_state.current_veo_result = None
 
     with st.spinner("Initializing case and indexing documents..."):
         case_id = save_case(case_title, query, workflow_choice, output_type)
@@ -2302,7 +2548,85 @@ This package includes a copy-ready prompt, scene prompts, narration, subtitles, 
                 key=f"download_media_{st.session_state.current_case_id}",
             )
 
-    st.info("Gemini Omni / Veo integration is prepared safely: the app now generates a production-ready video prompt package. A direct paid API call can be added later after confirming billing, model access and the exact video model name.")
+        st.markdown('<div class="section-title">Veo Video Generation Agent</div>', unsafe_allow_html=True)
+        st.markdown(
+            """
+<div class="report-card">
+<b>Veo Video Generation Agent</b><br>
+<span class="small-muted">This dedicated agent runs after the Indigenous Media & Advocacy Agent. It sends the reviewed video prompt package to Google Veo and returns an MP4 video when available.</span>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        st.warning("Veo video generation is a paid Google service. Generate a video only after reviewing the media package and confirming that you accept the cost.")
+
+        veo_col1, veo_col2, veo_col3, veo_col4 = st.columns([1.5, 2, 1, 1])
+        with veo_col1:
+            veo_api_mode = st.selectbox(
+                "Veo API Mode",
+                ["gemini_api", "vertex"],
+                index=0,
+                help="Use gemini_api with your Gemini API key, or vertex with Google Cloud ADC/service-account credentials.",
+                key="veo_api_mode_selectbox",
+            )
+        with veo_col2:
+            default_veo_model = os.getenv("VEO_MODEL", "veo-3.0-generate-preview")
+            veo_model_name = st.text_input("Veo Model Name", default_veo_model, key="veo_model_name_input")
+        with veo_col3:
+            veo_duration = st.selectbox("Duration", [8, 10], index=0, key="veo_duration_selectbox")
+        with veo_col4:
+            veo_aspect_ratio = st.selectbox("Aspect Ratio", ["16:9", "9:16", "1:1"], index=0, key="veo_aspect_ratio_selectbox")
+
+        confirm_veo_cost = st.checkbox(
+            "I have reviewed the media package and understand that Veo video generation may incur Google Cloud / Gemini API charges.",
+            key="confirm_veo_cost_checkbox",
+        )
+        generate_veo_button = st.button("Generate MP4 with Veo")
+
+        if generate_veo_button:
+            if not confirm_veo_cost:
+                st.error("Please tick the confirmation checkbox before calling the paid Veo video API.")
+            else:
+                with st.spinner("Running Veo Video Generation Agent. This can take several minutes..."):
+                    veo_result = generate_veo_video(
+                        st.session_state.current_case_id,
+                        media_result,
+                        veo_api_mode,
+                        veo_model_name.strip(),
+                        int(veo_duration),
+                        veo_aspect_ratio,
+                    )
+                    st.session_state.current_veo_result = veo_result
+                    if veo_result.get("status") == "completed" and veo_result.get("video_path"):
+                        st.success("Veo video generated successfully.")
+                    else:
+                        st.warning(f"Veo result: {veo_result.get('status')}. {veo_result.get('error') or ''}")
+
+    if st.session_state.get("current_veo_result"):
+        veo_result = st.session_state.current_veo_result
+        st.markdown(
+            f"""
+<div class="report-card">
+<b>Veo Video Generation Agent Result</b><br>
+<span class="small-muted">Status: {html.escape(str(veo_result.get('status', 'unknown')))} | Model: {html.escape(str(veo_result.get('model_name', 'not specified')))}</span><br><br>
+{html.escape(str(veo_result.get('error') or 'Video generation completed.'))}
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        video_path = veo_result.get("video_path")
+        if video_path and Path(video_path).exists():
+            st.video(video_path)
+            with open(video_path, "rb") as video_file:
+                st.download_button(
+                    label="Download Veo MP4 Video",
+                    data=video_file,
+                    file_name=os.path.basename(video_path),
+                    mime="video/mp4",
+                    key=f"download_veo_video_{st.session_state.current_case_id}",
+                )
+
+    st.info("Phase 3 is now prepared: the platform can generate a media package, send the reviewed prompt to Google Veo, poll the long-running operation, and return an MP4 when the API returns inline video bytes. For Vertex AI mode, configure GOOGLE_CLOUD_PROJECT, VEO_LOCATION, VEO_MODEL and GOOGLE_APPLICATION_CREDENTIALS_JSON in Streamlit secrets.")
 
     if st.session_state.current_map_path:
         st.markdown('<div class="section-title">Case-Specific Map Intelligence</div>', unsafe_allow_html=True)
@@ -2321,6 +2645,7 @@ if st.button("Reset Workflow"):
     st.session_state.current_output_type = None
     st.session_state.current_media_result = None
     st.session_state.current_map_data = None
+    st.session_state.current_veo_result = None
     st.session_state.query_text_area = ""
     st.rerun()
 
