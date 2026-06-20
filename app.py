@@ -661,25 +661,11 @@ OUTPUT_TYPE_OPTIONS = list(OUTPUT_STRUCTURES.keys())
 
 
 MEDIA_OUTPUT_STRUCTURES = {
-    "Short Social Media Video Script": {
-        "purpose": "A 3-5 minute script for Facebook Reels or YouTube Shorts.",
-        "sections": [
-            "Video Title",
-            "Target Audience",
-            "Hook",
-            "Narration Script",
-            "Scene Breakdown",
-            "On-Screen Text",
-            "Visual Suggestions",
-            "Call to Action",
-            "Hashtags",
-        ],
-    },
-    "Documentary Video Script": {
-        "purpose": "A longer documentary-style advocacy video script based on the generated report.",
+    "Documentary Script": {
+        "purpose": "A documentary-style advocacy script suitable for community awareness, NGO campaigns and public education.",
         "sections": [
             "Documentary Title",
-            "Purpose and Audience",
+            "Purpose and Target Audience",
             "Opening Scene",
             "Narration Script",
             "Historical / Legal Context",
@@ -687,10 +673,26 @@ MEDIA_OUTPUT_STRUCTURES = {
             "Interview Questions",
             "Suggested Visuals and B-Roll",
             "Closing Message",
+            "Call to Action",
         ],
     },
-    "YouTube Content Package": {
-        "purpose": "A YouTube-ready package including script, title, description, chapters and tags.",
+    "Advocacy Campaign Video": {
+        "purpose": "A campaign video designed for public mobilisation, institutional pressure and rights-based advocacy.",
+        "sections": [
+            "Campaign Video Title",
+            "Campaign Objective",
+            "Target Audience",
+            "Core Message",
+            "Narration Script",
+            "Scene-by-Scene Plan",
+            "Evidence to Highlight",
+            "Visual Identity Suggestions",
+            "Call to Action",
+            "Distribution Notes",
+        ],
+    },
+    "YouTube Package": {
+        "purpose": "A YouTube-ready package including title, description, chapters, script, tags and thumbnail text.",
         "sections": [
             "YouTube Title",
             "Video Description",
@@ -699,25 +701,41 @@ MEDIA_OUTPUT_STRUCTURES = {
             "Suggested Chapters",
             "Thumbnail Text",
             "Tags and Hashtags",
+            "Pinned Comment",
             "Call to Action",
         ],
     },
-    "Advocacy Campaign Video": {
-        "purpose": "A campaign-style advocacy video designed for public mobilisation and institutional pressure.",
+    "Podcast Episode": {
+        "purpose": "A podcast episode package based on the generated report, suitable for interviews or narrated advocacy content.",
         "sections": [
-            "Campaign Video Title",
-            "Campaign Objective",
-            "Target Audience",
-            "Key Message",
+            "Episode Title",
+            "Episode Summary",
+            "Host Introduction",
+            "Main Talking Points",
+            "Interview Questions",
             "Narration Script",
-            "Scene-by-Scene Plan",
-            "Evidence to Highlight",
-            "Visual Identity Suggestions",
+            "Expert Commentary Prompts",
+            "Closing Reflection",
             "Call to Action",
         ],
     },
-    "Speech Video Script": {
-        "purpose": "A speech-to-camera or conference-style video script for representatives and leaders.",
+    "Social Media Campaign": {
+        "purpose": "A multi-platform social media campaign package for public mobilisation and awareness raising.",
+        "sections": [
+            "Campaign Name",
+            "Campaign Objective",
+            "Key Message",
+            "Audience Segments",
+            "Instagram / Facebook Posts",
+            "X / Twitter Thread",
+            "LinkedIn Post",
+            "Short Video Concepts",
+            "Hashtags",
+            "Call to Action",
+        ],
+    },
+    "Speech Script": {
+        "purpose": "A speech-to-camera, conference or UN-style script for Indigenous representatives and leaders.",
         "sections": [
             "Speech Title",
             "Speaker Role",
@@ -729,17 +747,18 @@ MEDIA_OUTPUT_STRUCTURES = {
             "Closing Appeal",
         ],
     },
-    "AI Video Production Brief": {
-        "purpose": "A production-ready brief that can be copied into tools such as VideoExpress, HeyGen, Synthesia, Runway or similar platforms.",
+    "Gemini Omni / Veo Video Package": {
+        "purpose": "A production-ready package specifically structured for Gemini Omni / Veo video generation or similar text-to-video tools.",
         "sections": [
             "Video Objective",
-            "Recommended Video Type",
-            "Avatar / Presenter Instructions",
-            "Narration Script",
+            "Recommended Format",
+            "Primary Gemini Omni / Veo Prompt",
             "Scene Prompts",
-            "Image / B-Roll Prompts",
+            "Narration Script",
             "Subtitle Text",
-            "Music and Tone",
+            "Map / Evidence Visuals",
+            "CMA Branding Instructions",
+            "Negative Prompt / Safety Constraints",
             "Export Notes",
         ],
     },
@@ -749,7 +768,7 @@ MEDIA_OUTPUT_OPTIONS = list(MEDIA_OUTPUT_STRUCTURES.keys())
 
 
 def get_media_structure(media_type: str) -> dict:
-    return MEDIA_OUTPUT_STRUCTURES.get(media_type, MEDIA_OUTPUT_STRUCTURES["Short Social Media Video Script"])
+    return MEDIA_OUTPUT_STRUCTURES.get(media_type, MEDIA_OUTPUT_STRUCTURES["Gemini Omni / Veo Video Package"])
 
 
 def get_media_template(media_type: str) -> str:
@@ -789,18 +808,53 @@ def extract_report_text(report_json: dict) -> str:
     return "\n\n".join(parts)
 
 
-def generate_media_content(model, case_id: str, source_report: dict, media_type: str, target_platform: str, video_length: str) -> dict:
+def build_gemini_omni_payload(media_json: dict) -> dict:
+    """Create a safe, reviewable Gemini Omni / Veo request payload.
+
+    This does not call the paid video API. It prepares the exact content a future
+    video endpoint can use once billing, model access and model name are confirmed.
+    """
+    sections = media_json.get("sections", []) if isinstance(media_json, dict) else []
+    section_map = {
+        str(section.get("heading", "")).lower(): str(section.get("content", ""))
+        for section in sections if isinstance(section, dict)
+    }
+    primary_prompt = section_map.get("primary gemini omni / veo prompt", "")
+    if not primary_prompt:
+        primary_prompt = media_json.get("summary", "Create an Indigenous rights advocacy video based on the provided media package.")
+    return {
+        "provider": "Google Gemini Omni / Veo",
+        "status": "ready_for_review",
+        "api_call_enabled": False,
+        "model_env_var": "GEMINI_VIDEO_MODEL",
+        "suggested_model_placeholder": os.getenv("GEMINI_VIDEO_MODEL", "veo-model-name-to-confirm"),
+        "prompt": primary_prompt,
+        "source_media_type": media_json.get("media_type", "Gemini Omni / Veo Video Package"),
+        "target_platform": media_json.get("target_platform", "Not specified"),
+        "video_length": media_json.get("video_length", "Not specified"),
+        "notes": [
+            "This payload is intentionally not sent automatically to avoid unexpected paid video-generation costs.",
+            "Enable billing and confirm the correct Gemini/Veo model name before connecting the API call.",
+            "Review all legal and factual claims before producing public video content.",
+        ],
+    }
+
+
+def generate_media_content(model, case_id: str, source_report: dict, media_type: str, target_platform: str, video_length: str, audience: str = "Indigenous Peoples, NGOs, municipalities, UN mechanisms and public audiences", language: str = "English") -> dict:
     source_output_type = source_report.get("output_type", "Generated Report")
     source_text = extract_report_text(source_report)
     media_template = get_media_template(media_type)
     required_sections = get_media_structure(media_type)["sections"]
+    is_omni_package = media_type == "Gemini Omni / Veo Video Package"
     json_schema = f"""
 {{
-  "agent": "Media Generator Agent",
+  "agent": "Indigenous Media & Advocacy Agent",
   "source_output_type": "{source_output_type}",
   "media_type": "{media_type}",
   "target_platform": "{target_platform}",
   "video_length": "{video_length}",
+  "audience": "{audience}",
+  "language": "{language}",
   "title": "",
   "summary": "",
   "sections": [
@@ -811,10 +865,17 @@ def generate_media_content(model, case_id: str, source_report: dict, media_type:
   "confidence": "low | medium | high"
 }}
 """
+    omni_rules = """
+SPECIAL GEMINI OMNI / VEO RULES:
+- Create a clean, copy-ready text-to-video prompt suitable for Gemini Omni / Veo.
+- Include scene prompts with visual style, camera movement, map/evidence visuals, narration, subtitles and branding.
+- Include negative prompt/safety constraints: no fabricated violence, no exaggerated legal claims, no misleading maps, no invented community statements.
+- The video should be dignified, rights-based, evidence-led and suitable for Indigenous advocacy.
+""" if is_omni_package else ""
     prompt = f"""
-You are the Media Generator Agent for the ⵣ Indigenous Smart Governance Platform ⵣ.
+You are the Indigenous Media & Advocacy Agent for the ⵣ Indigenous Smart Governance Platform ⵣ.
 
-Your task is to transform the already-generated platform output into a professional media advocacy product.
+Your task is to transform the already-generated platform output into a professional Indigenous rights media and advocacy product.
 
 SOURCE OUTPUT TYPE:
 {source_output_type}
@@ -828,6 +889,12 @@ TARGET PLATFORM:
 VIDEO LENGTH:
 {video_length}
 
+TARGET AUDIENCE:
+{audience}
+
+LANGUAGE:
+{language}
+
 SOURCE REPORT CONTENT:
 {source_text}
 
@@ -836,29 +903,35 @@ MEDIA FORMAT TO FOLLOW:
 
 RULES:
 - Use only the source report content as the evidence base.
-- Do not invent legal facts or new allegations.
-- Make the language public-facing, clear, persuasive and respectful.
-- Preserve Indigenous rights framing and UNDRIP references where relevant.
-- Include practical visual guidance for editors or AI video tools.
+- Do not invent legal facts, community testimonies, locations, harms or allegations.
+- Make the language public-facing, clear, persuasive, respectful and legally careful.
+- Preserve Indigenous rights framing, FPIC, UNDRIP and self-determination where relevant.
+- Include practical visual guidance for editors, designers or AI video tools.
 - If evidence is limited, say so clearly.
 - Return valid JSON only.
 - Use the exact required section headings in a "sections" list.
+- Avoid defamatory language; use "potential", "alleged", "reported", or "requires further verification" where appropriate.
+{omni_rules}
 
 JSON SCHEMA TO FOLLOW:
 {json_schema}
 """
     output = safe_json_response(model, prompt)
-    output["agent"] = "Media Generator Agent"
+    output["agent"] = "Indigenous Media & Advocacy Agent"
     output["media_type"] = media_type
     output["source_output_type"] = source_output_type
     output["target_platform"] = target_platform
     output["video_length"] = video_length
+    output["audience"] = audience
+    output["language"] = language
     if "sections" not in output:
         output["sections"] = [
             {"heading": heading, "content": output.get("summary", "No information provided.") if idx == 0 else "No information provided."}
             for idx, heading in enumerate(required_sections)
         ]
-    save_output(case_id, "Media Generator Agent", output)
+    if is_omni_package:
+        output["gemini_omni_payload"] = build_gemini_omni_payload(output)
+    save_output(case_id, "Indigenous Media & Advocacy Agent", output)
     return output
 
 
@@ -1225,7 +1298,7 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
     font_name = _register_pdf_font()
     media_type = media_json.get("media_type", "Media Package")
     safe_media_type = re.sub(r"[^A-Za-z0-9_-]+", "_", media_type)
-    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_media_type}_Media_Generator_Agent.pdf"
+    pdf_path = REPORT_STORE / f"case_{case_id}_{safe_media_type}_Indigenous_Media_Advocacy_Agent.pdf"
 
     styles = getSampleStyleSheet()
     for style in styles.byName.values():
@@ -1237,7 +1310,7 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
         Spacer(1, 12),
         Paragraph(html.escape(media_type), styles["Heading1"]),
         Spacer(1, 6),
-        Paragraph("Media Generator Agent", styles["Heading2"]),
+        Paragraph("Indigenous Media & Advocacy Agent", styles["Heading2"]),
         Spacer(1, 12),
     ]
 
@@ -1250,6 +1323,8 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
         ("Source Output Type", media_json.get("source_output_type", "Not specified")),
         ("Target Platform", media_json.get("target_platform", "Not specified")),
         ("Video Length", media_json.get("video_length", "Not specified")),
+        ("Audience", media_json.get("audience", "Not specified")),
+        ("Language", media_json.get("language", "Not specified")),
     ]
     for label, value in metadata:
         story.append(Paragraph(f"<b>{html.escape(label)}:</b> {html.escape(str(value))}", styles["BodyText"]))
@@ -1290,6 +1365,20 @@ def create_media_pdf_report(case_id: str, media_json: dict) -> str:
                 story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
         else:
             story.append(Paragraph(html.escape(str(evidence_items)), styles["BodyText"]))
+        story.append(Spacer(1, 10))
+
+    gemini_payload = media_json.get("gemini_omni_payload")
+    if isinstance(gemini_payload, dict):
+        story.append(Paragraph("Gemini Omni / Veo Payload", styles["Heading2"]))
+        for key in ["provider", "status", "api_call_enabled", "suggested_model_placeholder", "prompt"]:
+            if key in gemini_payload:
+                story.append(Paragraph(f"<b>{html.escape(str(key))}:</b> {html.escape(str(gemini_payload.get(key)))}", styles["BodyText"]))
+                story.append(Spacer(1, 6))
+        notes = gemini_payload.get("notes", [])
+        if notes:
+            story.append(Paragraph("Payload Notes", styles["Heading2"]))
+            for item in notes:
+                story.append(Paragraph("• " + html.escape(str(item)), styles["BodyText"]))
         story.append(Spacer(1, 10))
 
     story.append(Paragraph("Confidence", styles["Heading2"]))
@@ -2083,12 +2172,12 @@ if st.session_state.workflow_completed:
                 key=f"download_{agent_name}_{st.session_state.current_case_id}",
             )
 
-    st.markdown('<div class="section-title">Create Advocacy Media Content</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Indigenous Media & Advocacy Agent</div>', unsafe_allow_html=True)
     st.markdown(
         """
 <div class="report-card">
-<b>Media Generator Agent</b><br>
-<span class="small-muted">Generate a video script, documentary script, YouTube package, campaign video plan, speech video, or AI video production brief from the final report.</span>
+<b>Indigenous Media & Advocacy Agent</b><br>
+<span class="small-muted">Transform the final report into public-facing advocacy content, including Documentary Scripts, Advocacy Campaign Videos, YouTube Packages, Podcast Episodes, Social Media Campaigns, Speech Scripts, and Gemini Omni / Veo Video Packages.</span>
 </div>
 """,
         unsafe_allow_html=True,
@@ -2107,6 +2196,7 @@ if st.session_state.workflow_completed:
         selected_media_type = st.selectbox(
             "Media Output Type",
             MEDIA_OUTPUT_OPTIONS,
+            index=MEDIA_OUTPUT_OPTIONS.index("Gemini Omni / Veo Video Package") if "Gemini Omni / Veo Video Package" in MEDIA_OUTPUT_OPTIONS else 0,
             key="media_output_type_selectbox",
         )
     with media_col2:
@@ -2118,8 +2208,10 @@ if st.session_state.workflow_completed:
                 "YouTube Shorts",
                 "YouTube Long Form",
                 "LinkedIn",
+                "Podcast Platforms",
                 "Conference / Public Event",
                 "UN / International Mechanism",
+                "Google Gemini Omni / Veo",
                 "AI Video Tool such as VideoExpress / HeyGen / Synthesia",
             ],
             key="media_target_platform_selectbox",
@@ -2131,13 +2223,37 @@ if st.session_state.workflow_completed:
             key="media_length_selectbox",
         )
 
-    generate_media_button = st.button("Generate Media Advocacy Package")
+    media_col4, media_col5 = st.columns([2, 2])
+    with media_col4:
+        selected_audience = st.selectbox(
+            "Audience",
+            [
+                "Indigenous communities and representatives",
+                "UN experts and international mechanisms",
+                "Municipalities and public authorities",
+                "NGOs, donors and civil society",
+                "General public and social media audiences",
+                "Government and corporate dialogue partners",
+            ],
+            key="media_audience_selectbox",
+        )
+    with media_col5:
+        selected_language = st.selectbox(
+            "Language",
+            ["English", "French", "Arabic", "Tamazight", "Bilingual English/French", "Bilingual Arabic/Tamazight"],
+            key="media_language_selectbox",
+        )
+
+    if selected_media_type == "Gemini Omni / Veo Video Package":
+        st.warning("This option prepares a Gemini Omni / Veo-ready production package and prompt. It does not automatically call the paid video-generation API, so it avoids unexpected costs.")
+
+    generate_media_button = st.button("Generate Indigenous Media & Advocacy Package")
 
     if generate_media_button:
         if not final_report:
             st.error("No final report is available to transform into media content.")
         else:
-            with st.spinner("Running Media Generator Agent..."):
+            with st.spinner("Running Indigenous Media & Advocacy Agent..."):
                 media_result = generate_media_content(
                     model,
                     st.session_state.current_case_id,
@@ -2145,9 +2261,11 @@ if st.session_state.workflow_completed:
                     selected_media_type,
                     selected_target_platform,
                     selected_video_length,
+                    selected_audience,
+                    selected_language,
                 )
                 st.session_state.current_media_result = media_result
-                st.success("Media advocacy package generated.")
+                st.success("Indigenous media and advocacy package generated.")
 
     if st.session_state.get("current_media_result"):
         media_result = st.session_state.current_media_result
@@ -2156,12 +2274,24 @@ if st.session_state.workflow_completed:
             f"""
 <div class="report-card">
 <b>{html.escape(str(media_title))}</b><br>
-<span class="small-muted">{html.escape(str(media_result.get('media_type', 'Media Package')))} • {html.escape(str(media_result.get('target_platform', 'Target platform not specified')))}</span><br><br>
+<span class="small-muted">{html.escape(str(media_result.get('media_type', 'Media Package')))} • {html.escape(str(media_result.get('target_platform', 'Target platform not specified')))} • {html.escape(str(media_result.get('language', 'Language not specified')))}</span><br><br>
 {html.escape(str(media_result.get('summary', ''))[:300])}...
 </div>
 """,
             unsafe_allow_html=True,
         )
+        if isinstance(media_result.get("gemini_omni_payload"), dict):
+            payload = media_result["gemini_omni_payload"]
+            st.markdown(
+                f"""
+<div class="report-card">
+<b>Gemini Omni / Veo Payload Ready</b><br>
+<span class="small-muted">Provider: {html.escape(str(payload.get('provider', 'Google Gemini Omni / Veo')))} | API call enabled: {html.escape(str(payload.get('api_call_enabled', False)))}</span><br><br>
+This package includes a copy-ready prompt, scene prompts, narration, subtitles, CMA branding guidance and safety constraints for future video generation.
+</div>
+""",
+                unsafe_allow_html=True,
+            )
         media_pdf_path = create_media_pdf_report(st.session_state.current_case_id, media_result)
         with open(media_pdf_path, "rb") as media_pdf_file:
             st.download_button(
@@ -2172,7 +2302,7 @@ if st.session_state.workflow_completed:
                 key=f"download_media_{st.session_state.current_case_id}",
             )
 
-    st.info("Phase 2 AI video generation can later connect this production brief to tools such as VideoExpress, HeyGen, Synthesia or Runway. This release generates the professional script and production package first, keeping costs low and allowing human review before video rendering.")
+    st.info("Gemini Omni / Veo integration is prepared safely: the app now generates a production-ready video prompt package. A direct paid API call can be added later after confirming billing, model access and the exact video model name.")
 
     if st.session_state.current_map_path:
         st.markdown('<div class="section-title">Case-Specific Map Intelligence</div>', unsafe_allow_html=True)
