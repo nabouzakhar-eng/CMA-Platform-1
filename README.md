@@ -44,4 +44,8 @@ streamlit run app.py
 GEMINI_API_KEY = "your_key_here"
 ```
 
+## Deployment
+
+This application is being migrated from Streamlit Community Cloud to Google Cloud Run as part of the Indigenous Smart Governance Platform (ISGP) architecture.
+
 Do not commit `.env` or `.streamlit/secrets.toml` to GitHub.
