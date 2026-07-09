@@ -1,0 +1,14 @@
+.git
+__pycache__
+*.pyc
+.env
+.streamlit/secrets.toml
+venv/
+.venv/
+.idea/
+.vscode/
+*.db
+app copy.py
+maps/
+reports/
+videos/
