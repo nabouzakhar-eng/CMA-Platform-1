@@ -26,7 +26,6 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-from sentence_transformers import SentenceTransformer
 
 # -----------------------------------------------------------------------------
 # Streamlit page config must be the first Streamlit command.
@@ -315,6 +314,8 @@ section[data-testid="stSidebar"] h3 {
 # -----------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading embedding model...")
 def get_embed_model():
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
@@ -493,27 +494,23 @@ class VectorStore:
             [chunk["text"] for chunk in self.chunks],
             show_progress_bar=False,
         )
-
+        
         embeddings = np.asarray(embeddings, dtype="float32")
         self.embeddings = embeddings
-
         self.index = faiss.IndexFlatL2(embeddings.shape[1])
         self.index.add(embeddings)
-        embeddings = np.array(embeddings).astype("float32")
-        self.embeddings = embeddings
-        self.index = faiss.IndexFlatL2(embeddings.shape[1])
-        self.index.add(embeddings)
-
+        
     def search(self, query: str, k: int = 5, case_id: str | None = None) -> list[dict]:
         if self.embeddings is None or not self.chunks:
             return []
-        model = get_embed_model()
 
+        model = get_embed_model()
+        
         q_emb = model.encode(
             [query],
             show_progress_bar=False,
         )
-
+        
         q_emb = np.asarray(q_emb, dtype="float32")
 
         # IMPORTANT: restrict retrieval to the current case when case_id is provided.
