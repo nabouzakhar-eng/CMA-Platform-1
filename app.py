@@ -2291,26 +2291,41 @@ Produce an integrated governance report containing key findings, evidence, risk 
         "Comprehensive Indigenous Governance Assessment": "full_governance_workflow",
     }
 
+    # Keep the selected professional request and the editable text area in sync.
+    # This is deliberately handled before the text area is created so Streamlit
+    # always displays the full request, including after a redeploy or browser refresh.
+    default_prompt_name = "Select a professional consultation request"
+
+    if "predefined_prompt_selectbox" not in st.session_state:
+        st.session_state.predefined_prompt_selectbox = default_prompt_name
+
+    if "last_predefined_prompt" not in st.session_state:
+        st.session_state.last_predefined_prompt = None
+
     if "query_text_area" not in st.session_state:
         st.session_state.query_text_area = ""
 
-    def update_consultancy_request_from_predefined():
-        selected = st.session_state.predefined_prompt_selectbox
-        st.session_state.query_text_area = predefined_prompts.get(selected, "")
-        if selected in prompt_to_workflow:
-            st.session_state.workflow_selectbox = prompt_to_workflow[selected]
-
-    st.selectbox(
+    selected_prompt = st.selectbox(
         "Choose a professional consultation request:",
         list(predefined_prompts.keys()),
         key="predefined_prompt_selectbox",
-        on_change=update_consultancy_request_from_predefined,
     )
+
+    # Update the text only when the selected template changes. This preserves any
+    # manual edits the user makes after choosing a professional request.
+    if selected_prompt != st.session_state.last_predefined_prompt:
+        st.session_state.query_text_area = predefined_prompts.get(selected_prompt, "")
+        st.session_state.last_predefined_prompt = selected_prompt
+
+        mapped_workflow = prompt_to_workflow.get(selected_prompt)
+        if mapped_workflow:
+            st.session_state.workflow_selectbox = mapped_workflow
 
     query = st.text_area(
         "Consultancy Request",
         key="query_text_area",
-        height=160,
+        height=260,
+        help="Review and edit the professional consultation request before running the agents.",
     )
 
     workflow_choice = st.selectbox(
@@ -2660,6 +2675,8 @@ if st.button("Reset Workflow"):
     st.session_state.current_map_data = None
     st.session_state.current_veo_result = None
     st.session_state.query_text_area = ""
+    st.session_state.predefined_prompt_selectbox = "Select a professional consultation request"
+    st.session_state.last_predefined_prompt = None
     st.rerun()
 
 st.markdown('<div class="section-title">Case Registry</div>', unsafe_allow_html=True)
