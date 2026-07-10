@@ -318,8 +318,6 @@ def get_embed_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
-EMBED_MODEL = get_embed_model()
-
 # -----------------------------------------------------------------------------
 # Database
 # -----------------------------------------------------------------------------
@@ -488,7 +486,19 @@ class VectorStore:
             self.index = None
             self.embeddings = None
             return
-        embeddings = EMBED_MODEL.encode([c["text"] for c in self.chunks])
+
+        model = get_embed_model()
+
+        embeddings = model.encode(
+            [chunk["text"] for chunk in self.chunks],
+            show_progress_bar=False,
+        )
+
+        embeddings = np.asarray(embeddings, dtype="float32")
+        self.embeddings = embeddings
+
+        self.index = faiss.IndexFlatL2(embeddings.shape[1])
+        self.index.add(embeddings)
         embeddings = np.array(embeddings).astype("float32")
         self.embeddings = embeddings
         self.index = faiss.IndexFlatL2(embeddings.shape[1])
@@ -497,8 +507,14 @@ class VectorStore:
     def search(self, query: str, k: int = 5, case_id: str | None = None) -> list[dict]:
         if self.embeddings is None or not self.chunks:
             return []
-        q_emb = EMBED_MODEL.encode([query])
-        q_emb = np.array(q_emb).astype("float32")
+        model = get_embed_model()
+
+        q_emb = model.encode(
+            [query],
+            show_progress_bar=False,
+        )
+
+        q_emb = np.asarray(q_emb, dtype="float32")
 
         # IMPORTANT: restrict retrieval to the current case when case_id is provided.
         # Without this, old Libya documents from previous cases can be retrieved for
