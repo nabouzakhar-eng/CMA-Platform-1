@@ -2291,47 +2291,48 @@ Produce an integrated governance report containing key findings, evidence, risk 
         "Comprehensive Indigenous Governance Assessment": "full_governance_workflow",
     }
 
-    # Keep the selected professional request and the editable text area in sync.
-    # This is deliberately handled before the text area is created so Streamlit
-    # always displays the full request, including after a redeploy or browser refresh.
-    default_prompt_name = "Select a professional consultation request"
-
-    if "predefined_prompt_selectbox" not in st.session_state:
-        st.session_state.predefined_prompt_selectbox = default_prompt_name
-
-    if "last_predefined_prompt" not in st.session_state:
-        st.session_state.last_predefined_prompt = None
-
-    if "query_text_area" not in st.session_state:
-        st.session_state.query_text_area = ""
+    # Use a separate text-area widget key for each consultation template.
+    # This avoids stale Streamlit widget state after Cloud Run redeployments and
+    # guarantees that the selected template appears immediately.
+    consultation_options = list(predefined_prompts.keys())
 
     selected_prompt = st.selectbox(
         "Choose a professional consultation request:",
-        list(predefined_prompts.keys()),
+        consultation_options,
         key="predefined_prompt_selectbox",
     )
 
-    # Update the text only when the selected template changes. This preserves any
-    # manual edits the user makes after choosing a professional request.
-    if selected_prompt != st.session_state.last_predefined_prompt:
-        st.session_state.query_text_area = predefined_prompts.get(selected_prompt, "")
-        st.session_state.last_predefined_prompt = selected_prompt
-
-        mapped_workflow = prompt_to_workflow.get(selected_prompt)
-        if mapped_workflow:
-            st.session_state.workflow_selectbox = mapped_workflow
+    selected_prompt_text = predefined_prompts.get(selected_prompt, "")
+    consultation_widget_key = (
+        "consultancy_request_"
+        + re.sub(r"[^a-z0-9]+", "_", selected_prompt.lower()).strip("_")
+    )
 
     query = st.text_area(
         "Consultancy Request",
-        key="query_text_area",
-        height=260,
-        help="Review and edit the professional consultation request before running the agents.",
+        value=selected_prompt_text,
+        key=consultation_widget_key,
+        height=320,
+        help="Review or edit the full professional consultation request before running the agents.",
     )
 
+    workflow_options = [
+        "auto",
+        "language_culture_workflow",
+        "land_rights_workflow",
+        "climate_risk_workflow",
+        "human_rights_workflow",
+        "women_children_youth_workflow",
+        "data_access_rights_workflow",
+        "full_governance_workflow",
+    ]
+
+    recommended_workflow = prompt_to_workflow.get(selected_prompt, "auto")
     workflow_choice = st.selectbox(
         "Workflow",
-        ["auto", "language_culture_workflow", "land_rights_workflow", "climate_risk_workflow", "human_rights_workflow", "women_children_youth_workflow", "data_access_rights_workflow", "full_governance_workflow"],
-        key="workflow_selectbox",
+        workflow_options,
+        index=workflow_options.index(recommended_workflow),
+        key=f"workflow_selectbox_{selected_prompt}",
     )
 
     doc_type = st.selectbox(
@@ -2674,9 +2675,11 @@ if st.button("Reset Workflow"):
     st.session_state.current_media_result = None
     st.session_state.current_map_data = None
     st.session_state.current_veo_result = None
-    st.session_state.query_text_area = ""
+    # Clear any dynamically-created consultancy request widget values.
+    for state_key in list(st.session_state.keys()):
+        if state_key.startswith("consultancy_request_") or state_key.startswith("workflow_selectbox_"):
+            del st.session_state[state_key]
     st.session_state.predefined_prompt_selectbox = "Select a professional consultation request"
-    st.session_state.last_predefined_prompt = None
     st.rerun()
 
 st.markdown('<div class="section-title">Case Registry</div>', unsafe_allow_html=True)
