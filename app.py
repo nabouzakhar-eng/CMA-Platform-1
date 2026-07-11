@@ -466,10 +466,18 @@ class VectorStore:
             start += step
         return chunks
 
-    def rebuild(self) -> None:
+    def rebuild(self, case_id: str | None = None) -> None:
         self.chunks = []
         conn = sqlite3.connect(DB_PATH)
-        rows = conn.execute("SELECT doc_id, case_id, filename, text, doc_type FROM documents").fetchall()
+        if case_id:
+            rows = conn.execute(
+                "SELECT doc_id, case_id, filename, text, doc_type FROM documents WHERE case_id=?",
+                (case_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT doc_id, case_id, filename, text, doc_type FROM documents"
+            ).fetchall()
         conn.close()
         for doc_id, case_id, filename, text, doc_type in rows:
             for chunk in self.chunk_text(text or ""):
@@ -2024,6 +2032,9 @@ if "workflow_completed" not in st.session_state:
     st.session_state.workflow_completed = False
     st.session_state.current_case_id = None
     st.session_state.current_agent_results = []
+
+if "workflow_error" not in st.session_state:
+    st.session_state.workflow_error = None
     st.session_state.current_map_path = None
     st.session_state.current_output_type = None
     st.session_state.current_media_result = None
@@ -2372,48 +2383,134 @@ Produce an integrated governance report containing key findings, evidence, risk 
 if run_button:
     if not query.strip():
         st.error("Please enter a consultancy request.")
-        st.stop()
+    elif not uploaded_files:
+        st.error("Please upload at least one evidence file before running the agents.")
+    else:
+        st.session_state.workflow_completed = False
+        st.session_state.current_case_id = None
+        st.session_state.current_agent_results = []
+        st.session_state.current_map_path = None
+        st.session_state.current_output_type = output_type
+        st.session_state.current_media_result = None
+        st.session_state.current_map_data = None
+        st.session_state.current_veo_result = None
+        st.session_state.workflow_error = None
 
-    st.session_state.workflow_completed = False
-    st.session_state.current_case_id = None
-    st.session_state.current_agent_results = []
-    st.session_state.current_map_path = None
-    st.session_state.current_output_type = output_type
-    st.session_state.current_media_result = None
-    st.session_state.current_map_data = None
-    st.session_state.current_veo_result = None
+        progress = st.progress(0, text="Creating the case...")
+        status_box = st.empty()
 
-    with st.spinner("Initializing case and indexing documents..."):
-        case_id = save_case(case_title, query, workflow_choice, output_type)
-        st.session_state.current_case_id = case_id
+        try:
+            case_id = save_case(case_title, query, workflow_choice, output_type)
+            st.session_state.current_case_id = case_id
 
-        if uploaded_files:
-            for f in uploaded_files:
-                text = extract_text_from_file(f)
-                if text.strip():
-                    save_document(case_id, f.name, text, doc_type)
+            progress.progress(10, text="Extracting uploaded documents...")
+            indexed_documents = 0
+            extraction_errors = []
 
-        VECTOR_STORE.rebuild()
-        st.success("Documents indexed.")
+            for uploaded_file in uploaded_files:
+                try:
+                    try:
+                        uploaded_file.seek(0)
+                    except Exception:
+                        pass
 
-    workflow = choose_workflow_from_doc_type(doc_type, query) if workflow_choice == "auto" else workflow_choice
-    st.info(f"Selected workflow: {workflow}")
+                    extracted_text = extract_text_from_file(uploaded_file)
+                    if extracted_text.strip():
+                        save_document(
+                            case_id,
+                            uploaded_file.name,
+                            extracted_text,
+                            doc_type,
+                        )
+                        indexed_documents += 1
+                    else:
+                        extraction_errors.append(
+                            f"{uploaded_file.name}: no readable text was extracted."
+                        )
+                except Exception as file_exc:
+                    extraction_errors.append(
+                        f"{uploaded_file.name}: {file_exc}"
+                    )
 
-    with st.spinner("Running multi-agent workflow..."):
-        results = manager.run(case_id, query, workflow, output_type)
-        st.session_state.current_agent_results = results
-        st.success("Multi-agent workflow completed.")
+            if indexed_documents == 0:
+                raise RuntimeError(
+                    "No readable text could be extracted from the uploaded files. "
+                    "Please upload PDFs with selectable text, DOCX, TXT, or MD files."
+                )
 
-    with st.spinner("Running Map Intelligence Agent..."):
-        map_data = generate_map_intelligence(model, case_id, query, output_type)
-        st.session_state.current_map_data = map_data
-        st.session_state.current_map_path = generate_map(case_id, map_data)
-        mapped_count = len(map_data.get("locations", [])) if isinstance(map_data, dict) else 0
-        st.success(f"Map generated with {mapped_count} case-specific location(s).")
+            if extraction_errors:
+                st.warning(
+                    "Some files could not be fully processed:\n\n"
+                    + "\n".join(f"- {item}" for item in extraction_errors)
+                )
 
-    update_case_status(case_id, "completed")
-    st.session_state.workflow_completed = True
-    st.rerun()
+            progress.progress(25, text="Loading the embedding model and indexing this case...")
+            status_box.info(
+                "The first indexing run may take longer while the embedding model is loaded."
+            )
+
+            VECTOR_STORE.rebuild(case_id=case_id)
+
+            workflow = (
+                choose_workflow_from_doc_type(doc_type, query)
+                if workflow_choice == "auto"
+                else workflow_choice
+            )
+            st.info(f"Selected workflow: {workflow}")
+
+            progress.progress(40, text="Running the multi-agent workflow...")
+            results = manager.run(case_id, query, workflow, output_type)
+
+            if not results:
+                raise RuntimeError(
+                    "The multi-agent workflow completed without returning any outputs."
+                )
+
+            st.session_state.current_agent_results = results
+
+            progress.progress(80, text="Generating the case map...")
+            try:
+                map_data = generate_map_intelligence(
+                    model,
+                    case_id,
+                    query,
+                    output_type,
+                )
+                st.session_state.current_map_data = map_data
+                st.session_state.current_map_path = generate_map(case_id, map_data)
+            except Exception as map_exc:
+                st.session_state.current_map_data = {
+                    "locations": [],
+                    "error": str(map_exc),
+                }
+                st.session_state.current_map_path = None
+                st.warning(
+                    f"The reports were generated, but the map could not be created: {map_exc}"
+                )
+
+            update_case_status(case_id, "completed")
+            st.session_state.workflow_completed = True
+
+            progress.progress(100, text="Workflow completed.")
+            status_box.success(
+                f"Completed successfully. {len(results)} agent output(s) are ready below."
+            )
+
+            # Intentionally do not call st.rerun() here.
+            # Results are rendered immediately in the same execution.
+        except Exception as exc:
+            if st.session_state.current_case_id:
+                try:
+                    update_case_status(st.session_state.current_case_id, "failed")
+                except Exception:
+                    pass
+
+            st.session_state.workflow_error = str(exc)
+            st.session_state.workflow_completed = False
+            progress.empty()
+            status_box.empty()
+            st.error(f"Workflow failed: {exc}")
+            st.exception(exc)
 
 # -----------------------------------------------------------------------------
 # Results
@@ -2425,7 +2522,15 @@ if st.session_state.workflow_completed:
         agent_name = r.get("agent", "Agent Report")
         confidence = r.get("confidence", "Not specified")
         summary = html.escape(str(r.get("summary", ""))[:300])
-        pdf_path = create_agent_pdf_report(st.session_state.current_case_id, r, r.get("output_type", "Report"))
+        try:
+            pdf_path = create_agent_pdf_report(
+                st.session_state.current_case_id,
+                r,
+                r.get("output_type", "Report"),
+            )
+        except Exception as pdf_exc:
+            pdf_path = None
+            st.warning(f"Could not create the PDF for {agent_name}: {pdf_exc}")
 
         st.markdown(
             f"""
@@ -2438,14 +2543,15 @@ if st.session_state.workflow_completed:
             unsafe_allow_html=True,
         )
 
-        with open(pdf_path, "rb") as pdf_file:
-            st.download_button(
-                label=f"Download {agent_name} PDF",
-                data=pdf_file,
-                file_name=os.path.basename(pdf_path),
-                mime="application/pdf",
-                key=f"download_{agent_name}_{st.session_state.current_case_id}",
-            )
+        if pdf_path and Path(pdf_path).exists():
+            with open(pdf_path, "rb") as pdf_file:
+                st.download_button(
+                    label=f"Download {agent_name} PDF",
+                    data=pdf_file.read(),
+                    file_name=os.path.basename(pdf_path),
+                    mime="application/pdf",
+                    key=f"download_{agent_name}_{st.session_state.current_case_id}",
+                )
 
     st.markdown('<div class="section-title">Indigenous Media & Advocacy Agent</div>', unsafe_allow_html=True)
     st.markdown(
