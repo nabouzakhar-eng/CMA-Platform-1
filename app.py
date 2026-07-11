@@ -450,6 +450,13 @@ def extract_text_from_file(uploaded_file) -> str:
 # Vector Store
 # -----------------------------------------------------------------------------
 class VectorStore:
+    """Lightweight in-memory retrieval for Cloud Run.
+
+    This version deliberately avoids loading SentenceTransformer/PyTorch during a
+    workflow. That model can exceed the memory available to a small Cloud Run
+    instance and restart the container before any output is displayed.
+    """
+
     def __init__(self):
         self.chunks: list[dict] = []
         self.index = None
@@ -466,75 +473,67 @@ class VectorStore:
             start += step
         return chunks
 
+    @staticmethod
+    def _tokens(value: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[A-Za-zÀ-ÿ0-9_'-]{3,}", (value or "").lower())
+            if token not in {
+                "the", "and", "for", "with", "from", "that", "this", "into",
+                "their", "have", "has", "are", "was", "were", "will", "would",
+            }
+        }
+
     def rebuild(self, case_id: str | None = None) -> None:
         self.chunks = []
         conn = sqlite3.connect(DB_PATH)
-        if case_id:
-            rows = conn.execute(
-                "SELECT doc_id, case_id, filename, text, doc_type FROM documents WHERE case_id=?",
-                (case_id,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT doc_id, case_id, filename, text, doc_type FROM documents"
-            ).fetchall()
-        conn.close()
-        for doc_id, case_id, filename, text, doc_type in rows:
-            for chunk in self.chunk_text(text or ""):
+        try:
+            if case_id:
+                rows = conn.execute(
+                    "SELECT doc_id, case_id, filename, text, doc_type "
+                    "FROM documents WHERE case_id=?",
+                    (case_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT doc_id, case_id, filename, text, doc_type FROM documents"
+                ).fetchall()
+        finally:
+            conn.close()
+
+        for doc_id, row_case_id, filename, doc_text, doc_type in rows:
+            for chunk in self.chunk_text(doc_text or ""):
                 if chunk.strip():
                     self.chunks.append(
                         {
                             "doc_id": doc_id,
-                            "case_id": case_id,
+                            "case_id": row_case_id,
                             "filename": filename,
                             "doc_type": doc_type,
                             "text": chunk,
                         }
                     )
-        if not self.chunks:
-            self.index = None
-            self.embeddings = None
-            return
 
-        model = get_embed_model()
-
-        embeddings = model.encode(
-            [chunk["text"] for chunk in self.chunks],
-            show_progress_bar=False,
-        )
-        
-        embeddings = np.asarray(embeddings, dtype="float32")
-        self.embeddings = embeddings
-        self.index = faiss.IndexFlatL2(embeddings.shape[1])
-        self.index.add(embeddings)
-        
     def search(self, query: str, k: int = 5, case_id: str | None = None) -> list[dict]:
-        if self.embeddings is None or not self.chunks:
-            return []
-
-        model = get_embed_model()
-        
-        q_emb = model.encode(
-            [query],
-            show_progress_bar=False,
-        )
-        
-        q_emb = np.asarray(q_emb, dtype="float32")
-
-        # IMPORTANT: restrict retrieval to the current case when case_id is provided.
-        # Without this, old Libya documents from previous cases can be retrieved for
-        # a new Morocco case, causing the agents and maps to use the wrong country.
-        candidate_indices = [
-            i for i, chunk in enumerate(self.chunks)
+        candidates = [
+            chunk for chunk in self.chunks
             if case_id is None or chunk.get("case_id") == case_id
         ]
-        if not candidate_indices:
+        if not candidates:
             return []
 
-        candidate_embeddings = self.embeddings[candidate_indices]
-        distances = np.sum((candidate_embeddings - q_emb[0]) ** 2, axis=1)
-        ranked_positions = np.argsort(distances)[: min(k, len(candidate_indices))]
-        return [self.chunks[candidate_indices[pos]] for pos in ranked_positions]
+        query_tokens = self._tokens(query)
+        scored = []
+        for position, chunk in enumerate(candidates):
+            chunk_tokens = self._tokens(chunk.get("text", ""))
+            overlap = len(query_tokens & chunk_tokens)
+            # Preserve document order as a secondary signal.
+            score = overlap - (position * 0.000001)
+            scored.append((score, chunk))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        selected = [chunk for _, chunk in scored[: max(1, min(k, len(scored)))]]
+        return selected
 
 
 VECTOR_STORE = VectorStore()
@@ -548,6 +547,7 @@ def safe_json_response(model, prompt: str) -> dict:
         response = model.generate_content(
             prompt,
             generation_config={"response_mime_type": "application/json"},
+            request_options={"timeout": 120},
         )
         return json.loads(response.text)
     except Exception as exc:
@@ -1441,6 +1441,275 @@ class ManagerAgent:
             results.append(output)
             context_chain += f"\n\nOutput from {agent.name}:\n{json.dumps(output, ensure_ascii=False)}"
         return results
+
+
+def _case_evidence_text(case_id: str, max_chars: int = 30000) -> str:
+    """Return evidence for one case without depending on the vector model."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(
+            "SELECT filename, text FROM documents WHERE case_id=? ORDER BY created_at",
+            (case_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    parts = []
+    for filename, document_text in rows:
+        cleaned = (document_text or "").strip()
+        if cleaned:
+            parts.append(f"SOURCE FILE: {filename}\n{cleaned}")
+    return "\n\n".join(parts)[:max_chars]
+
+
+def _fallback_outputs(
+    case_id: str,
+    query: str,
+    workflow: str,
+    output_type: str,
+    reason: str = "",
+) -> list[dict]:
+    """Always create visible outputs, even when the external AI call fails."""
+    evidence_text = _case_evidence_text(case_id, max_chars=12000)
+    filenames = []
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        filenames = [
+            row[0] for row in conn.execute(
+                "SELECT filename FROM documents WHERE case_id=?",
+                (case_id,),
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+    evidence_note = (
+        "The uploaded evidence was indexed successfully. "
+        "AI enrichment was unavailable during this run"
+        + (f": {reason}" if reason else ".")
+    )
+    specialist = {
+        "agent": "Evidence Review Agent",
+        "output_type": output_type,
+        "summary": evidence_note,
+        "key_findings": [
+            f"Consultancy request received: {query[:600]}",
+            f"Workflow selected: {workflow}",
+            f"Evidence files indexed: {', '.join(filenames) if filenames else 'None'}",
+            "The source text is available for a subsequent AI-assisted rerun.",
+        ],
+        "risks": [
+            "The automatic AI analysis could not be completed in this run.",
+            "Legal and factual conclusions require human verification.",
+        ],
+        "actions": [
+            "Review the indexed evidence and rerun the workflow.",
+            "Check the Gemini API key, quota, model access and Cloud Run logs.",
+        ],
+        "evidence": filenames,
+        "confidence": "low",
+    }
+
+    structure = get_output_structure(output_type)
+    sections = []
+    for index, heading in enumerate(structure["sections"]):
+        if index == 0:
+            content = evidence_note
+        elif heading in {"Facts and Evidence Reviewed", "Evidence Overview", "Annex / Evidence List"}:
+            content = (
+                f"Evidence files: {', '.join(filenames) if filenames else 'No files listed'}.\n\n"
+                f"Extracted evidence preview:\n{evidence_text[:3000]}"
+            )
+        elif "Recommended" in heading or "Recommendations" in heading or "Actions" in heading:
+            content = (
+                "1. Verify the Gemini service configuration and quota.\n"
+                "2. Review the indexed documents manually.\n"
+                "3. Rerun the AI workflow after service verification."
+            )
+        else:
+            content = (
+                "This section has been created as a guaranteed fallback. "
+                "AI-assisted analysis was not available during this run."
+            )
+
+        sections.append({"heading": heading, "content": content})
+
+    final_report = {
+        "agent": "Report Generation Agent",
+        "output_type": output_type,
+        "title": f"{output_type}: {query[:120]}",
+        "summary": evidence_note,
+        "sections": sections,
+        "evidence": filenames,
+        "confidence": "low",
+    }
+
+    for output in (specialist, final_report):
+        save_output(case_id, output["agent"], output)
+
+    return [specialist, final_report]
+
+
+def run_guaranteed_workflow(
+    model,
+    case_id: str,
+    query: str,
+    workflow: str,
+    output_type: str,
+) -> list[dict]:
+    """Generate the specialist analysis and final report in one bounded AI call.
+
+    A deterministic fallback is returned and saved if Gemini is unavailable,
+    malformed, over quota, or times out. Therefore the blue workflow button always
+    produces visible outputs and downloadable reports after documents are indexed.
+    """
+    evidence_text = _case_evidence_text(case_id)
+    if not evidence_text.strip():
+        return _fallback_outputs(
+            case_id, query, workflow, output_type,
+            "No readable evidence text was available.",
+        )
+
+    requested_agents = [
+        build_agents(model)[key].name
+        for key in WORKFLOWS.get(workflow, WORKFLOWS["full_governance_workflow"])
+        if key != "report"
+    ]
+    structure = get_output_structure(output_type)
+    section_names = structure["sections"]
+
+    prompt = f"""
+You are the Agent Orchestrator for the Indigenous Smart Governance Platform.
+
+Create one consolidated JSON response containing:
+1. concise specialist outputs for the requested agents; and
+2. one complete final {output_type} produced by the Report Generation Agent.
+
+CONSULTANCY REQUEST:
+{query}
+
+WORKFLOW:
+{workflow}
+
+SPECIALIST AGENTS:
+{json.dumps(requested_agents, ensure_ascii=False)}
+
+EVIDENCE:
+{evidence_text}
+
+FINAL REPORT PURPOSE:
+{structure["purpose"]}
+
+REQUIRED FINAL REPORT SECTIONS:
+{json.dumps(section_names, ensure_ascii=False)}
+
+RULES:
+- Use only the uploaded evidence.
+- Do not invent facts, quotations, locations or legal conclusions.
+- State evidence gaps clearly.
+- Return valid JSON only.
+- Each specialist output must contain: agent, summary, key_findings, risks,
+  actions, evidence and confidence.
+- The final_report must contain: agent, output_type, title, summary, sections,
+  evidence and confidence.
+- sections must use the exact required headings.
+
+JSON FORMAT:
+{{
+  "specialist_outputs": [
+    {{
+      "agent": "",
+      "summary": "",
+      "key_findings": [],
+      "risks": [],
+      "actions": [],
+      "evidence": [],
+      "confidence": "low | medium | high"
+    }}
+  ],
+  "final_report": {{
+    "agent": "Report Generation Agent",
+    "output_type": "{output_type}",
+    "title": "",
+    "summary": "",
+    "sections": [
+      {{"heading": "{section_names[0]}", "content": ""}}
+    ],
+    "evidence": [],
+    "confidence": "low | medium | high"
+  }}
+}}
+"""
+
+    response = None
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 0.2,
+            },
+            request_options={"timeout": 150},
+        )
+        payload = json.loads(response.text)
+
+        outputs = []
+        specialist_outputs = payload.get("specialist_outputs", [])
+        if isinstance(specialist_outputs, list):
+            for item in specialist_outputs:
+                if isinstance(item, dict):
+                    item.setdefault("agent", "Specialist Agent")
+                    item["output_type"] = output_type
+                    item.setdefault("summary", "No summary returned.")
+                    item.setdefault("key_findings", [])
+                    item.setdefault("risks", [])
+                    item.setdefault("actions", [])
+                    item.setdefault("evidence", [])
+                    item.setdefault("confidence", "low")
+                    save_output(case_id, item["agent"], item)
+                    outputs.append(item)
+
+        final_report = payload.get("final_report")
+        if not isinstance(final_report, dict):
+            raise ValueError("Gemini did not return a valid final_report object.")
+
+        returned_sections = final_report.get("sections")
+        section_map = {}
+        if isinstance(returned_sections, list):
+            for section in returned_sections:
+                if isinstance(section, dict):
+                    section_map[str(section.get("heading", "")).strip()] = str(
+                        section.get("content", "")
+                    )
+
+        final_report["agent"] = "Report Generation Agent"
+        final_report["output_type"] = output_type
+        final_report.setdefault("title", output_type)
+        final_report.setdefault("summary", "AI-assisted report generated from the uploaded evidence.")
+        final_report["sections"] = [
+            {
+                "heading": heading,
+                "content": section_map.get(
+                    heading,
+                    "No verified information was returned for this section.",
+                ),
+            }
+            for heading in section_names
+        ]
+        final_report.setdefault("evidence", [])
+        final_report.setdefault("confidence", "medium")
+        save_output(case_id, "Report Generation Agent", final_report)
+        outputs.append(final_report)
+
+        if not outputs:
+            raise ValueError("No usable outputs were returned.")
+        return outputs
+    except Exception as exc:
+        raw = getattr(response, "text", "") if response is not None else ""
+        reason = str(exc)
+        if raw:
+            reason += f" | Raw response preview: {raw[:500]}"
+        return _fallback_outputs(case_id, query, workflow, output_type, reason)
 
 
 # -----------------------------------------------------------------------------
@@ -2458,8 +2727,8 @@ if run_button:
             )
             st.info(f"Selected workflow: {workflow}")
 
-            progress.progress(40, text="Running the multi-agent workflow...")
-            results = manager.run(case_id, query, workflow, output_type)
+            progress.progress(40, text="Generating specialist analysis and the final report...")
+            results = run_guaranteed_workflow(model, case_id, query, workflow, output_type)
 
             if not results:
                 raise RuntimeError(
