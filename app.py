@@ -1,4 +1,5 @@
 import html
+import io
 import json
 import base64
 import os
@@ -443,6 +444,27 @@ def extract_text_from_file(uploaded_file) -> str:
             return uploaded_file.read().decode("utf-8", errors="ignore")
     except Exception as exc:
         st.warning(f"Could not extract text from {uploaded_file.name}: {exc}")
+    return ""
+
+
+def extract_text_from_bytes(filename: str, file_bytes: bytes) -> str:
+    """Extract text from persisted upload bytes.
+
+    Using bytes avoids losing the uploaded-file stream after Streamlit reruns.
+    """
+    lower_name = filename.lower()
+    try:
+        buffer = io.BytesIO(file_bytes)
+        if lower_name.endswith(".pdf"):
+            reader = PdfReader(buffer)
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+        if lower_name.endswith(".docx"):
+            doc = Document(buffer)
+            return "\n".join(paragraph.text for paragraph in doc.paragraphs)
+        if lower_name.endswith((".txt", ".md")):
+            return file_bytes.decode("utf-8", errors="ignore")
+    except Exception as exc:
+        st.warning(f"Could not extract text from {filename}: {exc}")
     return ""
 
 
@@ -2479,7 +2501,7 @@ Developed by the World Amazigh Congress (CMA) in collaboration with AI Tech Acad
 # We use a real left-hand page column for Document Upload instead of st.sidebar.
 # This guarantees the upload section is always visible on Streamlit Cloud, even if
 # the Streamlit sidebar is collapsed or hidden by the browser layout.
-left_panel, main_panel = st.columns([0.95, 5.05], gap="large")
+left_panel, main_panel = st.columns([1.35, 4.65], gap="large")
 
 with left_panel:
     st.markdown(
@@ -2496,29 +2518,55 @@ with left_panel:
         "Upload evidence files",
         type=["pdf", "docx", "txt", "md"],
         accept_multiple_files=True,
-        label_visibility="collapsed",
-        help="Upload PDF, DOCX, TXT or MD evidence files for the agents to analyse.",
+        key="evidence_file_uploader",
+        label_visibility="visible",
+        help="Upload one or more PDF, DOCX, TXT or MD evidence files.",
     )
+
+    # Persist the uploaded bytes in session state. This prevents files from
+    # disappearing when another widget causes a Streamlit rerun.
+    if uploaded_files:
+        persisted_uploads = []
+        for uploaded_file in uploaded_files:
+            persisted_uploads.append(
+                {
+                    "name": uploaded_file.name,
+                    "type": uploaded_file.type,
+                    "size": uploaded_file.size,
+                    "data": uploaded_file.getvalue(),
+                }
+            )
+        st.session_state["persisted_evidence_files"] = persisted_uploads
+    elif "persisted_evidence_files" not in st.session_state:
+        st.session_state["persisted_evidence_files"] = []
+
+    persisted_uploads = st.session_state.get("persisted_evidence_files", [])
 
     st.markdown(
         """
 <div class="upload-help-box">
-    <b>200MB per file</b><br>
-    PDF, DOCX, TXT, MD
+    <b>Accepted formats</b><br>
+    PDF, DOCX, TXT and MD<br><br>
+    Files remain available while you complete the form.
 </div>
 """,
         unsafe_allow_html=True,
-)
+    )
 
-    if uploaded_files:
-        st.markdown("**Uploaded files**")
-        for uploaded_file in uploaded_files:
-            size_mb = uploaded_file.size / (1024 * 1024)
-            safe_name = html.escape(uploaded_file.name)
+    if persisted_uploads:
+        st.success(f"{len(persisted_uploads)} file(s) ready for analysis.")
+        for file_info in persisted_uploads:
+            size_mb = file_info["size"] / (1024 * 1024)
+            safe_name = html.escape(file_info["name"])
             st.markdown(
                 f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
                 unsafe_allow_html=True,
             )
+
+        if st.button("Clear uploaded files", key="clear_evidence_files"):
+            st.session_state["persisted_evidence_files"] = []
+            st.session_state.pop("evidence_file_uploader", None)
+            st.rerun()
 
 with main_panel:
     # Main input form
@@ -2652,7 +2700,7 @@ Produce an integrated governance report containing key findings, evidence, risk 
 if run_button:
     if not query.strip():
         st.error("Please enter a consultancy request.")
-    elif not uploaded_files:
+    elif not st.session_state.get("persisted_evidence_files"):
         st.error("Please upload at least one evidence file before running the agents.")
     else:
         st.session_state.workflow_completed = False
@@ -2676,35 +2724,56 @@ if run_button:
             indexed_documents = 0
             extraction_errors = []
 
-            for uploaded_file in uploaded_files:
-                try:
-                    try:
-                        uploaded_file.seek(0)
-                    except Exception:
-                        pass
+            persisted_uploads = st.session_state.get("persisted_evidence_files", [])
 
-                    extracted_text = extract_text_from_file(uploaded_file)
-                    if extracted_text.strip():
-                        save_document(
-                            case_id,
-                            uploaded_file.name,
-                            extracted_text,
-                            doc_type,
-                        )
-                        indexed_documents += 1
-                    else:
-                        extraction_errors.append(
-                            f"{uploaded_file.name}: no readable text was extracted."
-                        )
-                except Exception as file_exc:
-                    extraction_errors.append(
-                        f"{uploaded_file.name}: {file_exc}"
+            for file_info in persisted_uploads:
+                filename = file_info["name"]
+                try:
+                    extracted_text = extract_text_from_bytes(
+                        filename,
+                        file_info["data"],
                     )
+
+                    # Guarantee that every uploaded file enters the case record.
+                    # Scanned/image-only PDFs receive a clear placeholder so the
+                    # workflow still produces a visible report.
+                    if not extracted_text.strip():
+                        extracted_text = (
+                            f"Uploaded evidence file: {filename}. "
+                            "No machine-readable text was extracted. "
+                            "The file may be scanned or image-only and requires OCR or manual review."
+                        )
+                        extraction_errors.append(
+                            f"{filename}: no selectable text was found; a review placeholder was indexed."
+                        )
+
+                    save_document(
+                        case_id,
+                        filename,
+                        extracted_text,
+                        doc_type,
+                    )
+                    indexed_documents += 1
+                except Exception as file_exc:
+                    # Even if one file cannot be parsed, index a diagnostic record
+                    # so the guaranteed workflow can still produce an output.
+                    diagnostic_text = (
+                        f"Uploaded evidence file: {filename}. "
+                        f"Automatic extraction failed: {file_exc}. "
+                        "Manual review is required."
+                    )
+                    save_document(
+                        case_id,
+                        filename,
+                        diagnostic_text,
+                        doc_type,
+                    )
+                    indexed_documents += 1
+                    extraction_errors.append(f"{filename}: {file_exc}")
 
             if indexed_documents == 0:
                 raise RuntimeError(
-                    "No readable text could be extracted from the uploaded files. "
-                    "Please upload PDFs with selectable text, DOCX, TXT, or MD files."
+                    "No uploaded files were available to process. Please upload a file and try again."
                 )
 
             if extraction_errors:
@@ -2713,9 +2782,9 @@ if run_button:
                     + "\n".join(f"- {item}" for item in extraction_errors)
                 )
 
-            progress.progress(25, text="Loading the embedding model and indexing this case...")
+            progress.progress(25, text="Indexing the uploaded evidence...")
             status_box.info(
-                "The first indexing run may take longer while the embedding model is loaded."
+                "The uploaded evidence has been received and is being prepared for analysis."
             )
 
             VECTOR_STORE.rebuild(case_id=case_id)
@@ -2728,14 +2797,40 @@ if run_button:
             st.info(f"Selected workflow: {workflow}")
 
             progress.progress(40, text="Generating specialist analysis and the final report...")
-            results = run_guaranteed_workflow(model, case_id, query, workflow, output_type)
+            try:
+                results = run_guaranteed_workflow(
+                    model,
+                    case_id,
+                    query,
+                    workflow,
+                    output_type,
+                )
+            except Exception as workflow_exc:
+                results = _fallback_outputs(
+                    case_id,
+                    query,
+                    workflow,
+                    output_type,
+                    f"Workflow execution error: {workflow_exc}",
+                )
 
+            # Absolute final safeguard: always create and display a report.
             if not results:
-                raise RuntimeError(
-                    "The multi-agent workflow completed without returning any outputs."
+                results = _fallback_outputs(
+                    case_id,
+                    query,
+                    workflow,
+                    output_type,
+                    "The workflow returned no usable output.",
                 )
 
             st.session_state.current_agent_results = results
+            st.session_state.workflow_completed = True
+
+            # Show a confirmation before optional map generation.
+            st.success(
+                f"{len(results)} output(s) were produced. Reports are displayed below."
+            )
 
             progress.progress(80, text="Generating the case map...")
             try:
