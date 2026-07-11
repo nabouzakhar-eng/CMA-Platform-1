@@ -2521,11 +2521,18 @@ with left_panel:
         unsafe_allow_html=True,
     )
 
+    if "upload_widget_version" not in st.session_state:
+        st.session_state.upload_widget_version = 0
+
+    upload_widget_key = (
+        f"evidence_file_uploader_{st.session_state.upload_widget_version}"
+    )
+
     uploaded_files = st.file_uploader(
         "Upload evidence files",
         type=["pdf", "docx", "txt", "md"],
         accept_multiple_files=True,
-        key="evidence_file_uploader",
+        key=upload_widget_key,
         label_visibility="visible",
         help="Upload one or more PDF, DOCX, TXT or MD evidence files.",
     )
@@ -2550,6 +2557,10 @@ with left_panel:
                 f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
                 unsafe_allow_html=True,
             )
+
+        if st.button("Clear uploaded files", key="clear_uploaded_files"):
+            st.session_state.upload_widget_version += 1
+            st.rerun()
 
 with main_panel:
     # Main input form
@@ -2604,38 +2615,34 @@ Produce an integrated governance report containing key findings, evidence, risk 
 
     consultation_options = list(predefined_prompts.keys())
 
-    if "predefined_prompt_selectbox" not in st.session_state:
-        st.session_state.predefined_prompt_selectbox = consultation_options[0]
-
-    if "query_text_area" not in st.session_state:
-        st.session_state.query_text_area = ""
-
-    if "workflow_selectbox" not in st.session_state:
-        st.session_state.workflow_selectbox = "auto"
-
-    def apply_selected_consultation_request() -> None:
-        selected = st.session_state.get(
-            "predefined_prompt_selectbox",
-            consultation_options[0],
-        )
-        st.session_state.query_text_area = predefined_prompts.get(selected, "")
-        st.session_state.workflow_selectbox = prompt_to_workflow.get(
-            selected,
-            "auto",
-        )
-
     selected_prompt = st.selectbox(
         "Choose a professional consultation request:",
         consultation_options,
         key="predefined_prompt_selectbox",
-        on_change=apply_selected_consultation_request,
     )
+
+    prompt_slug = re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        selected_prompt.lower(),
+    ).strip("_") or "blank"
+
+    prompt_state_key = f"consultancy_request_{prompt_slug}"
+    workflow_state_key = f"workflow_selectbox_{prompt_slug}"
+
+    # Each professional template has its own editable text area.
+    # User edits remain saved when switching between templates.
+    if prompt_state_key not in st.session_state:
+        st.session_state[prompt_state_key] = predefined_prompts.get(
+            selected_prompt,
+            "",
+        )
 
     query = st.text_area(
         "Consultancy Request",
-        key="query_text_area",
+        key=prompt_state_key,
         height=320,
-        help="Review or edit the full professional consultation request before running the agents.",
+        help="Review and amend this professional consultation request before running the agents.",
     )
 
     workflow_options = [
@@ -2649,13 +2656,17 @@ Produce an integrated governance report containing key findings, evidence, risk 
         "full_governance_workflow",
     ]
 
-    if st.session_state.workflow_selectbox not in workflow_options:
-        st.session_state.workflow_selectbox = "auto"
+    recommended_workflow = prompt_to_workflow.get(selected_prompt, "auto")
+    if workflow_state_key not in st.session_state:
+        st.session_state[workflow_state_key] = recommended_workflow
+
+    if st.session_state[workflow_state_key] not in workflow_options:
+        st.session_state[workflow_state_key] = recommended_workflow
 
     workflow_choice = st.selectbox(
         "Workflow",
         workflow_options,
-        key="workflow_selectbox",
+        key=workflow_state_key,
     )
 
     doc_type = st.selectbox(
@@ -3129,7 +3140,7 @@ This package includes a copy-ready prompt, scene prompts, narration, subtitles, 
 st.markdown("---")
 
 def reset_workflow_state() -> None:
-    keys_to_clear = [
+    fixed_keys = [
         "workflow_completed",
         "current_case_id",
         "current_agent_results",
@@ -3139,14 +3150,23 @@ def reset_workflow_state() -> None:
         "current_map_data",
         "current_veo_result",
         "workflow_error",
-        "evidence_file_uploader",
         "predefined_prompt_selectbox",
-        "query_text_area",
-        "workflow_selectbox",
     ]
-    for state_key in keys_to_clear:
+
+    for state_key in fixed_keys:
         st.session_state.pop(state_key, None)
 
+    for state_key in list(st.session_state.keys()):
+        if (
+            state_key.startswith("consultancy_request_")
+            or state_key.startswith("workflow_selectbox_")
+            or state_key.startswith("evidence_file_uploader_")
+        ):
+            st.session_state.pop(state_key, None)
+
+    st.session_state.upload_widget_version = (
+        st.session_state.get("upload_widget_version", 0) + 1
+    )
 
 st.button(
     "Reset Workflow",
