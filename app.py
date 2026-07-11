@@ -102,6 +102,13 @@ footer {visibility: hidden;}
 header {visibility: hidden;}
 .stApp { background-color: #f8fafc; }
 
+/* Keep the page visually stable during short Streamlit reruns. */
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+.main {
+    opacity: 1 !important;
+}
+
 /* Left sidebar upload panel */
 section[data-testid="stSidebar"] {
     background: #eef2f7;
@@ -2523,50 +2530,26 @@ with left_panel:
         help="Upload one or more PDF, DOCX, TXT or MD evidence files.",
     )
 
-    # Persist the uploaded bytes in session state. This prevents files from
-    # disappearing when another widget causes a Streamlit rerun.
-    if uploaded_files:
-        persisted_uploads = []
-        for uploaded_file in uploaded_files:
-            persisted_uploads.append(
-                {
-                    "name": uploaded_file.name,
-                    "type": uploaded_file.type,
-                    "size": uploaded_file.size,
-                    "data": uploaded_file.getvalue(),
-                }
-            )
-        st.session_state["persisted_evidence_files"] = persisted_uploads
-    elif "persisted_evidence_files" not in st.session_state:
-        st.session_state["persisted_evidence_files"] = []
-
-    persisted_uploads = st.session_state.get("persisted_evidence_files", [])
-
     st.markdown(
         """
 <div class="upload-help-box">
     <b>Accepted formats</b><br>
     PDF, DOCX, TXT and MD<br><br>
-    Files remain available while you complete the form.
+    Select all required evidence files before running the workflow.
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    if persisted_uploads:
-        st.success(f"{len(persisted_uploads)} file(s) ready for analysis.")
-        for file_info in persisted_uploads:
-            size_mb = file_info["size"] / (1024 * 1024)
-            safe_name = html.escape(file_info["name"])
+    if uploaded_files:
+        st.success(f"{len(uploaded_files)} file(s) ready for analysis.")
+        for uploaded_file in uploaded_files:
+            size_mb = uploaded_file.size / (1024 * 1024)
+            safe_name = html.escape(uploaded_file.name)
             st.markdown(
                 f'<div class="uploaded-file">✅ {safe_name}<br>{size_mb:.2f} MB</div>',
                 unsafe_allow_html=True,
             )
-
-        if st.button("Clear uploaded files", key="clear_evidence_files"):
-            st.session_state["persisted_evidence_files"] = []
-            st.session_state.pop("evidence_file_uploader", None)
-            st.rerun()
 
 with main_panel:
     # Main input form
@@ -2619,27 +2602,38 @@ Produce an integrated governance report containing key findings, evidence, risk 
         "Comprehensive Indigenous Governance Assessment": "full_governance_workflow",
     }
 
-    # Use a separate text-area widget key for each consultation template.
-    # This avoids stale Streamlit widget state after Cloud Run redeployments and
-    # guarantees that the selected template appears immediately.
     consultation_options = list(predefined_prompts.keys())
+
+    if "predefined_prompt_selectbox" not in st.session_state:
+        st.session_state.predefined_prompt_selectbox = consultation_options[0]
+
+    if "query_text_area" not in st.session_state:
+        st.session_state.query_text_area = ""
+
+    if "workflow_selectbox" not in st.session_state:
+        st.session_state.workflow_selectbox = "auto"
+
+    def apply_selected_consultation_request() -> None:
+        selected = st.session_state.get(
+            "predefined_prompt_selectbox",
+            consultation_options[0],
+        )
+        st.session_state.query_text_area = predefined_prompts.get(selected, "")
+        st.session_state.workflow_selectbox = prompt_to_workflow.get(
+            selected,
+            "auto",
+        )
 
     selected_prompt = st.selectbox(
         "Choose a professional consultation request:",
         consultation_options,
         key="predefined_prompt_selectbox",
-    )
-
-    selected_prompt_text = predefined_prompts.get(selected_prompt, "")
-    consultation_widget_key = (
-        "consultancy_request_"
-        + re.sub(r"[^a-z0-9]+", "_", selected_prompt.lower()).strip("_")
+        on_change=apply_selected_consultation_request,
     )
 
     query = st.text_area(
         "Consultancy Request",
-        value=selected_prompt_text,
-        key=consultation_widget_key,
+        key="query_text_area",
         height=320,
         help="Review or edit the full professional consultation request before running the agents.",
     )
@@ -2655,12 +2649,13 @@ Produce an integrated governance report containing key findings, evidence, risk 
         "full_governance_workflow",
     ]
 
-    recommended_workflow = prompt_to_workflow.get(selected_prompt, "auto")
+    if st.session_state.workflow_selectbox not in workflow_options:
+        st.session_state.workflow_selectbox = "auto"
+
     workflow_choice = st.selectbox(
         "Workflow",
         workflow_options,
-        index=workflow_options.index(recommended_workflow),
-        key=f"workflow_selectbox_{selected_prompt}",
+        key="workflow_selectbox",
     )
 
     doc_type = st.selectbox(
@@ -2700,7 +2695,7 @@ Produce an integrated governance report containing key findings, evidence, risk 
 if run_button:
     if not query.strip():
         st.error("Please enter a consultancy request.")
-    elif not st.session_state.get("persisted_evidence_files"):
+    elif not uploaded_files:
         st.error("Please upload at least one evidence file before running the agents.")
     else:
         st.session_state.workflow_completed = False
@@ -2724,14 +2719,13 @@ if run_button:
             indexed_documents = 0
             extraction_errors = []
 
-            persisted_uploads = st.session_state.get("persisted_evidence_files", [])
-
-            for file_info in persisted_uploads:
-                filename = file_info["name"]
+            for uploaded_file in uploaded_files:
+                filename = uploaded_file.name
                 try:
+                    file_bytes = uploaded_file.getvalue()
                     extracted_text = extract_text_from_bytes(
                         filename,
-                        file_info["data"],
+                        file_bytes,
                     )
 
                     # Guarantee that every uploaded file enters the case record.
@@ -2755,8 +2749,6 @@ if run_button:
                     )
                     indexed_documents += 1
                 except Exception as file_exc:
-                    # Even if one file cannot be parsed, index a diagnostic record
-                    # so the guaranteed workflow can still produce an output.
                     diagnostic_text = (
                         f"Uploaded evidence file: {filename}. "
                         f"Automatic extraction failed: {file_exc}. "
@@ -3136,21 +3128,30 @@ This package includes a copy-ready prompt, scene prompts, narration, subtitles, 
 
 st.markdown("---")
 
-if st.button("Reset Workflow"):
-    st.session_state.workflow_completed = False
-    st.session_state.current_case_id = None
-    st.session_state.current_agent_results = []
-    st.session_state.current_map_path = None
-    st.session_state.current_output_type = None
-    st.session_state.current_media_result = None
-    st.session_state.current_map_data = None
-    st.session_state.current_veo_result = None
-    # Clear any dynamically-created consultancy request widget values.
-    for state_key in list(st.session_state.keys()):
-        if state_key.startswith("consultancy_request_") or state_key.startswith("workflow_selectbox_"):
-            del st.session_state[state_key]
-    st.session_state.predefined_prompt_selectbox = "Select a professional consultation request"
-    st.rerun()
+def reset_workflow_state() -> None:
+    keys_to_clear = [
+        "workflow_completed",
+        "current_case_id",
+        "current_agent_results",
+        "current_map_path",
+        "current_output_type",
+        "current_media_result",
+        "current_map_data",
+        "current_veo_result",
+        "workflow_error",
+        "evidence_file_uploader",
+        "predefined_prompt_selectbox",
+        "query_text_area",
+        "workflow_selectbox",
+    ]
+    for state_key in keys_to_clear:
+        st.session_state.pop(state_key, None)
+
+
+st.button(
+    "Reset Workflow",
+    on_click=reset_workflow_state,
+)
 
 st.markdown('<div class="section-title">Case Registry</div>', unsafe_allow_html=True)
 cases_df, _ = query_registry()
